@@ -14,7 +14,7 @@ import {
 } from '../../packages/domain/index';
 import type { Store, Identity } from '../../packages/storage/store';
 import type { ResearchProvider } from './provider';
-import { reserve, settle, usageCost } from './budget';
+import { reserve, settle, usageCost, requestReservation } from './budget';
 import config from '../../config/research.json';
 export type Job = {
   id: string;
@@ -156,7 +156,7 @@ export async function tick(store: Store, provider: ResearchProvider, now = new D
         const allowed = await reserve(
           store,
           reservationId,
-          job.attempt ? 0.15 : job.maxCalls === 8 ? 0.35 : 0.25,
+          requestReservation(job.maxCalls),
           job.maxCalls,
           now,
         );

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, it, expect } from 'vitest';
 import { LocalStore } from '../packages/storage/local';
-import { reserve, settle } from '../services/research/budget';
+import { reserve, settle, requestReservation } from '../services/research/budget';
 import { startRun, tick, ingest, type Run } from '../services/research/engine';
 import { FakeProvider } from './local/fake-provider';
 import { demoCandidates } from './fixtures/opportunities';
@@ -24,8 +24,9 @@ it('atomically reserves budgets and settles only once', async () => {
     reserve(store, 'b', 0.8, 20, now),
   ]);
   expect(results.filter(Boolean)).toHaveLength(1);
-  await settle(store, 'a', 0.12, 2);
-  await settle(store, 'a', 0.12, 2);
+  const winner = results[0] ? 'a' : 'b';
+  await settle(store, winner, 0.12, 2);
+  await settle(store, winner, 0.12, 2);
   const b = await store.get<{ spent: number; reserved: number }>('runs', 'budget:day:2026-09-14');
   expect(b?.spent).toBeCloseTo(0.12);
   expect(b?.reserved).toBe(0);
@@ -84,4 +85,9 @@ it('requires authentication and preserves decisions through research', async () 
   expect(result.statusCode).toBe(200);
   await ingest(store, { ...c, dueDate: '2026-11-01' }, 'b', now);
   expect((await store.get<Opportunity>('opportunities', o.id))?.status).toBe('pursue');
+});
+
+it('defers a Terra request when the remaining budget cannot cover its token allowance', async () => {
+  expect(await reserve(store, 'earlier-research', 1.05, 1, now)).toBe(true);
+  expect(await reserve(store, 'terra-retry', requestReservation(2), 2, now)).toBe(false);
 });

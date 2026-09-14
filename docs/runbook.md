@@ -39,7 +39,7 @@ Plans/state may contain sensitive infrastructure configuration. Do not commit or
 
 ## Configure the deployed application
 
-The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research authenticates to Amazon Bedrock using the worker IAM role, without an API key. Enable the `openai.gpt-5.6-luna` Bedrock model agreement in the deployment account before the live check.
+The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research authenticates to Amazon Bedrock using the worker IAM role, without an API key. Enable the `openai.gpt-5.6-terra` Bedrock model agreement in the deployment account before the live check.
 
 ```sh
 npx tsx scripts/deployment.ts configure
@@ -49,7 +49,7 @@ npx tsx scripts/deployment.ts smoke
 
 `configure` sends invitations to the explicitly configured emails. `release-web` runs and checks the Amplify build. `smoke` verifies unauthenticated access rejection and a no-spend readiness guard. It does not prove the authenticated app or Bedrock integration.
 
-Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded Bedrock test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves $0.15 and two calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if search was absent, the limit was exceeded, or no source-supported candidate was returned. Do not run it repeatedly or in CI. Validate actual compatibility, tool-limit enforcement, evidence and usage before declaring live research ready.
+Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded Bedrock test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves the configured token allowance (currently $0.2176) and two calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if search was absent, the limit was exceeded, or no source-supported candidate was returned. Do not run it repeatedly or in CI. Validate actual compatibility, tool-limit enforcement, evidence and usage before declaring live research ready.
 
 After live checks pass, set `LIVE_CHECKS_PASSED=true` and run:
 

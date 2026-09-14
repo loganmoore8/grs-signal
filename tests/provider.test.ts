@@ -24,7 +24,7 @@ it('constructs a bounded background request with required search and a strict sc
   expect(mocks.create.mock.calls[0]![0]).toMatchObject({
     background: true,
     max_tool_calls: 6,
-    max_output_tokens: 12000,
+    max_output_tokens: 8000,
     tool_choice: 'required',
     text: { format: { strict: true } },
   });

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BedrockResearch } from '../services/research/provider';
-import { usageCost, reserve, settle } from '../services/research/budget';
+import { usageCost, reserve, settle, requestReservation } from '../services/research/budget';
 import { AwsStore } from '../packages/storage/aws';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -22,7 +22,7 @@ process.env.HISTORY_TABLE = deployment.history_table;
 process.env.SNAPSHOTS_BUCKET = deployment.snapshots_bucket;
 const store = new AwsStore(),
   reservation = `deployment-smoke:${randomUUID()}`;
-if (!(await reserve(store, reservation, 0.15, 2, now)))
+if (!(await reserve(store, reservation, requestReservation(2), 2, now)))
   throw new Error('Research budget is exhausted; live check was not submitted.');
 console.log(`Budget reservation: ${reservation}`);
 const id = await provider

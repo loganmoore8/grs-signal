@@ -133,3 +133,9 @@ export function usageCost(input: number, output: number, calls: number) {
     calls * config.prices.searchCall
   );
 }
+
+// Reserve a conservative input estimate plus the full configured output and tool allowance.
+// Actual input usage can vary; this is a workload control, not a provider billing cap.
+export function requestReservation(maxCalls: number) {
+  return usageCost(config.reservationInputTokens, config.maxOutputTokens, maxCalls);
+}

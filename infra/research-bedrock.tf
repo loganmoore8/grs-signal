@@ -10,7 +10,7 @@ resource "aws_iam_role_policy" "bedrock" {
         Effect    = "Allow"
         Action    = ["bedrock-mantle:CreateInference"]
         Resource  = "arn:aws:bedrock-mantle:${var.region}:${data.aws_caller_identity.current.account_id}:project/*"
-        Condition = { StringEquals = { "bedrock-mantle:Model" = "openai.gpt-5.6-luna" } }
+        Condition = { StringEquals = { "bedrock-mantle:Model" = jsondecode(file("${path.module}/../config/research.json")).model } }
       },
       {
         Effect   = "Allow"

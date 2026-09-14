@@ -32,7 +32,7 @@ it('signs research requests with IAM on the Bedrock web-search Responses endpoin
   expect(headers.get('authorization')).toContain('/us-west-2/bedrock-mantle/aws4_request');
   expect(headers.get('x-amz-security-token')).toBe('test-session');
   expect(JSON.parse(init.body as string)).toMatchObject({
-    model: 'openai.gpt-5.6-luna',
+    model: 'openai.gpt-5.6-terra',
     background: true,
     max_tool_calls: 2,
     tools: [{ type: 'web_search', external_web_access: true }],
