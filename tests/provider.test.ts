@@ -40,7 +40,11 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 it('bounds searches and retrieves durable results across restarts without repeating inference', async () => {
-  mocks.send.mockResolvedValue(response());
+  mocks.send
+    .mockResolvedValueOnce(
+      response(JSON.stringify({ queries: ['Agency current deadline amendment'], urls: [] })),
+    )
+    .mockResolvedValue(response());
   const search = {
     search: vi.fn().mockResolvedValue([{ url: c.officialUrl, title: c.title, text }]),
   };
@@ -58,10 +62,13 @@ it('bounds searches and retrieves durable results across restarts without repeat
     'completed',
   );
   expect(search.search).toHaveBeenCalledTimes(2);
-  expect(mocks.send).toHaveBeenCalledTimes(1);
+  expect(search.search.mock.calls[1][0]).toContain('amendment');
+  expect((await p.poll(id)).inputTokens).toBe(4000);
+  expect((await p.poll(id)).outputTokens).toBe(2000);
+  expect(mocks.send).toHaveBeenCalledTimes(2);
   expect(mocks.send.mock.calls[0][0].input).toMatchObject({
-    modelId: 'openai.gpt-oss-120b-1:0',
-    inferenceConfig: { maxTokens: 8000 },
+    modelId: 'us.anthropic.claude-sonnet-4-6',
+    inferenceConfig: { maxTokens: 1500 },
   });
 });
 it('downgrades snippets and removes invented excerpts', () => {
@@ -107,13 +114,17 @@ it('preserves costs when output is malformed or truncated', () => {
   ).toBe('failed');
 });
 it('does not return an id when durable storage fails', async () => {
-  mocks.send.mockResolvedValue(response());
+  mocks.send
+    .mockResolvedValueOnce(
+      response(JSON.stringify({ queries: ['Agency current deadline amendment'], urls: [] })),
+    )
+    .mockResolvedValue(response());
   vi.spyOn(store, 'put').mockRejectedValue(new Error('storage unavailable'));
   const p = new BedrockResearch(store, { search: async () => [] });
   await expect(
     p.start({ jobId: 'test', theme: 'Connect', windowDays: 30, now, maxCalls: 1, known: [] }),
   ).rejects.toThrow('storage unavailable');
-  expect(mocks.send).toHaveBeenCalledTimes(1);
+  expect(mocks.send).toHaveBeenCalledTimes(2);
 });
 it('missing usage retains the reservation instead of declaring zero cost', async () => {
   mocks.send.mockResolvedValue({ ...response(), usage: undefined });
@@ -164,4 +175,18 @@ it('accepts the runtime array prefix while retaining the strict object schema', 
     parseResearchResponse(response('[\n' + JSON.stringify({ candidates: [c] })), docs, 2, now)
       .status,
   ).toBe('completed');
+});
+
+it('keeps a date-only deadline without inventing midnight or a timezone', () => {
+  const dateOnly = { ...c, dueAt: c.dueDate, dueTimezone: 'UTC' };
+  const result = parseResearchResponse(
+    response(JSON.stringify({ candidates: [dateOnly] })),
+    docs,
+    1,
+    now,
+  );
+  expect(result.status).toBe('completed');
+  expect(result.candidates[0]?.dueAt).toBeNull();
+  expect(result.candidates[0]?.dueDate).toBe(c.dueDate);
+  expect(result.candidates[0]?.dueTimezone).toBeNull();
 });

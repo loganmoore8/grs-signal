@@ -1,5 +1,5 @@
 {
-  "model": "openai.gpt-oss-120b-1:0",
+  "model": "us.anthropic.claude-sonnet-4-6",
   "timezone": "America/Los_Angeles",
   "schemaVersion": "1",
   "dailyUsd": 1.25,
@@ -9,10 +9,10 @@
   "maxQualified": 15,
   "maxOutputTokens": 8000,
   "prices": {
-    "inputPerMillion": 0.15,
-    "outputPerMillion": 0.6,
+    "inputPerMillion": 3.3,
+    "outputPerMillion": 16.5,
     "searchCall": 0.00701,
-    "version": "2026-09-14-oss120b-agentcore"
+    "version": "2026-09-14-sonnet46-us-agentcore"
   },
   "themes": [
     "Amazon Connect, AWS professional services, CCaaS migration and IVR redesign",

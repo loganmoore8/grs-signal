@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest';
-import { isPublicAddress, pageText, fetchDocument } from '../services/research/documents';
+import {
+  isPublicAddress,
+  pageText,
+  fetchDocument,
+  procurementLinks,
+  evidencePassages,
+} from '../services/research/documents';
 it('blocks private, metadata, loopback and mapped private addresses', () => {
   for (const ip of [
     '127.0.0.1',
@@ -32,4 +38,18 @@ it('extracts bounded readable text without scripts and navigation', () => {
     ),
   ).toBe('Public RFP deadline');
   expect(pageText('<body>' + 'x'.repeat(30000) + '</body>')).toHaveLength(16000);
+});
+
+it('finds amendment links and later PDF deadline passages', () => {
+  expect(
+    procurementLinks(
+      '<a href="/addendum.pdf">Addendum 2</a><a href="mailto:buyer@example.com">bid contact</a>',
+      'https://city.gov/rfp',
+    ),
+  ).toEqual(['https://city.gov/addendum.pdf']);
+  const text =
+    'Introduction '.repeat(2000) +
+    'Proposal deadline extended to October 30, 2026. Contact center migration.';
+  expect(evidencePassages(text)).toContain('deadline extended to October 30');
+  expect(evidencePassages(text).length).toBeLessThanOrEqual(6000);
 });

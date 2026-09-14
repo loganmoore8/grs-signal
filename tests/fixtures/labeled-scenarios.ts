@@ -56,11 +56,11 @@ export function labeledScenarios(now: Date) {
     { verifiedAt: new Date(now.getTime() - 80 * 3600000).toISOString() },
     'review',
   );
-  add('Expired response deadline', { dueDate: '2020-01-01' }, 'review');
+  add('Expired response deadline', { dueDate: '2020-01-01' }, 'suppressed');
   add('Unknown procurement state', { procurementState: 'unknown' }, 'review');
-  add('Closed notice', { procurementState: 'closed' }, 'review');
-  add('Canceled procurement', { procurementState: 'canceled' }, 'review');
-  add('Already awarded', { procurementState: 'awarded' }, 'review');
+  add('Closed notice', { procurementState: 'closed' }, 'suppressed');
+  add('Canceled procurement', { procurementState: 'canceled' }, 'suppressed');
+  add('Already awarded', { procurementState: 'awarded' }, 'suppressed');
   add(
     'Confirmed eligibility blocker',
     { confirmedBlocker: true, blockers: ['Required vehicle unavailable'] },

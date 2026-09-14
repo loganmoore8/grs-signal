@@ -116,7 +116,7 @@ export class Conflict extends Error {
   }
 }
 
-export function assess(c: Candidate) {
+export function assess(c: Candidate, now = new Date()) {
   const f = c.facts;
   const breakdown = {
     centrality: { none: 0, incidental: 10, workstream: 20, primary: 30 }[f.centrality],
@@ -126,7 +126,10 @@ export function assess(c: Candidate) {
     role: { unknown: 0, plausible: 5, clear: 10 }[f.roleClarity],
   };
   const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
-  const excluded = !f.inScopeBuyer || Boolean(f.excludedReason && !f.materialTechnologyPackage);
+  const inactive =
+    expired(c, now) || ['closed', 'canceled', 'awarded'].includes(c.procurementState);
+  const excluded =
+    inactive || !f.inScopeBuyer || Boolean(f.excludedReason && !f.materialTechnologyPackage);
   const incomplete =
     c.confidence !== 'supported' ||
     !c.officialUrl ||
@@ -139,11 +142,8 @@ export function assess(c: Candidate) {
       : score >= scoring.review
         ? 'recommended'
         : 'low_fit';
-  const readiness = c.confirmedBlocker
-    ? 'blocked'
-    : incomplete
-      ? 'needs_verification'
-      : 'actionable';
+  const readiness =
+    c.confirmedBlocker || inactive ? 'blocked' : incomplete ? 'needs_verification' : 'actionable';
   return { score, breakdown, disposition, readiness } as const;
 }
 export function localDay(now: Date, timezone = 'America/Los_Angeles') {
@@ -245,7 +245,7 @@ export function createOpportunity(
 ): Opportunity {
   return {
     ...c,
-    ...assess(c),
+    ...assess(c, now),
     id,
     runId,
     status: 'new',
@@ -333,7 +333,7 @@ export function mergeOpportunity(
   return {
     ...old,
     ...next,
-    ...assess(next),
+    ...assess(next, now),
     version: old.version + 1,
     updatedAt: now.toISOString(),
     runId,

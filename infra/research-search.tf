@@ -61,7 +61,12 @@ resource "aws_iam_role_policy" "research_model" {
   name = "${var.name}-research-model"
   role = aws_iam_role.lambda["research"].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
-    { Effect = "Allow", Action = "bedrock:InvokeModel", Resource = "arn:aws:bedrock:${var.region}::foundation-model/${jsondecode(file("${path.module}/../config/research.json")).model}" },
+    { Effect = "Allow", Action = "bedrock:InvokeModel", Resource = [
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6",
+      "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6"
+    ] },
     { Effect = "Allow", Action = "bedrock-agentcore:InvokeGateway", Resource = aws_bedrockagentcore_gateway.search.gateway_arn }
   ] })
 }

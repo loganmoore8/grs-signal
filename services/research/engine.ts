@@ -229,7 +229,12 @@ export async function tick(
             },
             submitting.version,
           );
-        } catch {
+        } catch (error) {
+          const detail =
+            error instanceof Error
+              ? `${error.name}: ${error.message}`.slice(0, 700)
+              : 'Unknown provider error';
+          console.error('Research submission failed', { jobId: job.id, detail });
           await store.put(
             'runs',
             job.id,
@@ -238,7 +243,7 @@ export async function tick(
               version: submitting.version + 1,
               status: 'uncertain',
               leaseUntil: undefined,
-              error: 'Submission failed or timed out; no automatic duplicate request.',
+              error: `Submission failed or timed out; no automatic duplicate request. ${detail}`,
             },
             submitting.version,
           );
@@ -335,7 +340,7 @@ export async function tick(
         if (progress.candidateCount >= config.maxCandidates) break;
         const queued = await store.get<Queued>('history', item.id);
         if (!queued || queued.processed) continue;
-        const disposition = assess(queued.candidate).disposition;
+        const disposition = assess(queued.candidate, now).disposition;
         if (disposition !== 'suppressed' && (progress.qualifiedCount || 0) >= config.maxQualified)
           continue;
         await ingest(store, queued.candidate, run.id, now);
@@ -376,6 +381,24 @@ export async function tick(
         },
         latest.version,
       );
+    }
+  }
+}
+
+// Reclassify aging listings without changing user decisions, notes, or procurement facts.
+export async function refreshEligibility(store: Store, now = new Date()) {
+  for (const old of await store.list<Opportunity>('opportunities')) {
+    const current = assess(old, now);
+    if (old.disposition === current.disposition && old.readiness === current.readiness) continue;
+    try {
+      await store.put(
+        'opportunities',
+        old.id,
+        { ...old, ...current, version: old.version + 1 },
+        old.version,
+      );
+    } catch (e) {
+      if (!(e instanceof Conflict)) throw e;
     }
   }
 }

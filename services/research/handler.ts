@@ -1,6 +1,6 @@
 import { AwsStore, required } from '../../packages/storage/aws';
 import { BedrockResearch } from './provider';
-import { startRun, tick } from './engine';
+import { startRun, tick, refreshEligibility } from './engine';
 import { notify, SesMailer } from './alerts';
 let store: AwsStore, provider: BedrockResearch;
 export async function handler(event: { action?: 'start' | 'tick' }) {
@@ -8,6 +8,7 @@ export async function handler(event: { action?: 'start' | 'tick' }) {
   const readiness = await store.get<{ enabled: boolean }>('runs', 'runtime:readiness');
   if (!readiness?.enabled) return { status: 'not_ready', paidCalls: 0 };
   provider ??= new BedrockResearch(store);
+  await refreshEligibility(store);
   const hour = Number(
     new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Los_Angeles',

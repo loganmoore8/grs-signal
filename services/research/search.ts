@@ -4,12 +4,12 @@ import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { z } from 'zod';
 export type SearchHit = { url: string; title: string; text: string; publishedDate?: string };
 export interface Search {
-  search(query: string): Promise<SearchHit[]>;
+  search(query: string, publishedAfter?: string): Promise<SearchHit[]>;
 }
 const hitsSchema = z.object({
   results: z.array(
     z.object({
-      url: z.string().url(),
+      url: z.string().url().nullish(),
       title: z
         .string()
         .nullish()
@@ -78,7 +78,7 @@ export class AgentCoreSearch implements Search {
       );
     return message.result;
   }
-  async search(query: string): Promise<SearchHit[]> {
+  async search(query: string, publishedAfter?: string): Promise<SearchHit[]> {
     if (!this.tool) {
       const result = await this.call('tools/list', {});
       this.tool = result.tools?.find((t: { name: string }) =>
@@ -88,12 +88,29 @@ export class AgentCoreSearch implements Search {
     }
     const result = await this.call('tools/call', {
       name: this.tool,
-      arguments: { query: query.slice(0, 200), maxResults: 5 },
+      arguments: {
+        query: query.slice(0, 200),
+        maxResults: 5,
+        ...(publishedAfter
+          ? { filters: { publishedDateFilter: { from: searchDateBound(publishedAfter) } } }
+          : {}),
+      },
     });
     const structured = result.structuredContent;
     const parsed = structured?.results
       ? structured
       : JSON.parse(result.content.find((c: { type: string }) => c.type === 'text').text);
-    return hitsSchema.parse(parsed).results;
+    return parseSearchHits(parsed);
   }
+}
+
+export function parseSearchHits(value: unknown): SearchHit[] {
+  return hitsSchema
+    .parse(value)
+    .results.flatMap((hit) => (typeof hit.url === 'string' ? [{ ...hit, url: hit.url }] : []));
+}
+
+// AgentCore's date-filter grammar accepts seconds, but not ISO fractional seconds.
+export function searchDateBound(value: string) {
+  return new Date(value).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }

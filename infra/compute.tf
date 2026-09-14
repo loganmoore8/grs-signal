@@ -42,7 +42,7 @@ resource "aws_lambda_function" "functions" {
   filename                       = "${var.artifact_directory}/${each.key}.zip"
   source_code_hash               = filebase64sha256("${var.artifact_directory}/${each.key}.zip")
   timeout                        = each.key == "research" ? 300 : 30
-  memory_size                    = 256
+  memory_size                    = each.key == "research" ? 512 : 256
   reserved_concurrent_executions = each.key == "research" ? 1 : 5
   environment {
     variables = {

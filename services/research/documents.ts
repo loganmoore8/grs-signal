@@ -9,6 +9,7 @@ export type SourceDocument = {
   fetched: boolean;
   checkedAt: string;
   title: string;
+  links?: string[];
 };
 export function isPublicAddress(address: string) {
   try {
@@ -20,16 +21,16 @@ export function isPublicAddress(address: string) {
     return false;
   }
 }
-export function pageText(html: string) {
+export function pageText(html: string, limit = 16000) {
   const $ = load(html);
   $('script,style,noscript,nav,footer,header,svg').remove();
-  return $('body').text().replace(/\s+/g, ' ').trim().slice(0, 16000);
+  return $('body').text().replace(/\s+/g, ' ').trim().slice(0, limit);
 }
 export async function fetchDocument(
   address: string,
   redirects = 0,
   signal = AbortSignal.timeout(7000),
-): Promise<{ url: string; text: string }> {
+): Promise<{ url: string; text: string; links?: string[] }> {
   const url = new URL(address);
   if (
     url.protocol !== 'https:' ||
@@ -79,7 +80,7 @@ export async function fetchDocument(
           let size = 0;
           res.on('data', (chunk) => {
             size += chunk.length;
-            if (size > 2000000) req.destroy(new Error('Source exceeds size limit'));
+            if (size > 8000000) req.destroy(new Error('Source exceeds size limit'));
             else chunks.push(chunk);
           });
           res.on('end', () =>
@@ -101,7 +102,7 @@ export async function fetchDocument(
     const pdf = await getDocumentProxy(new Uint8Array(result.body), { isEvalSupported: false });
     let text = '';
     try {
-      for (let page = 1; page <= Math.min(pdf.numPages, 15) && text.length < 16000; page++) {
+      for (let page = 1; page <= Math.min(pdf.numPages, 40) && text.length < 96000; page++) {
         if (signal.aborted) throw new Error('Document extraction timed out');
         const content = await (await pdf.getPage(page)).getTextContent();
         text += content.items.map((item) => ('str' in item ? item.str : '')).join(' ') + ' ';
@@ -109,7 +110,49 @@ export async function fetchDocument(
     } finally {
       await pdf.destroy();
     }
-    return { url: url.href, text: text.replace(/\s+/g, ' ').trim().slice(0, 16000) };
+    return { url: url.href, text: text.replace(/\s+/g, ' ').trim().slice(0, 96000) };
   }
-  return { url: url.href, text: pageText(result.body?.toString('utf8') || '') };
+  const html = result.body?.toString('utf8') || '';
+  return { url: url.href, text: pageText(html, 96000), links: procurementLinks(html, url.href) };
+}
+
+export function procurementLinks(html: string, base: string) {
+  const $ = load(html),
+    links = new Set<string>();
+  $('a[href]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    if (
+      !/rfp|solicitation|addend|amend|procurement|bid|proposal|attachment|download/i.test(
+        $(a).text() + ' ' + href,
+      )
+    )
+      return;
+    try {
+      const u = new URL(href, base);
+      if (u.protocol === 'https:' && !u.username && !u.password) {
+        u.hash = '';
+        links.add(u.href);
+      }
+    } catch {
+      /* Ignore malformed links. */
+    }
+  });
+  return [...links].slice(0, 20);
+}
+// Keep the opening context and later relevant passages, not just the first PDF pages.
+export function evidencePassages(text: string, limit = 6000) {
+  if (text.length <= limit) return text;
+  let result = text.slice(0, 1800);
+  let end = 1800;
+  const pattern =
+    /contact.center|CCaaS|Amazon Connect|IVR|deadline|due date|closing date|proposal.{0,30}due|addend|amend|extended|cancel|awarded/gi;
+  for (const match of text.matchAll(pattern)) {
+    if (result.length >= limit) break;
+    const start = Math.max(end, match.index! - 220);
+    const stop = Math.min(text.length, match.index! + 500);
+    if (stop <= end) continue;
+    result += '\n[separate source passage]\n' + text.slice(start, stop);
+    end = stop;
+  }
+  return result.slice(0, limit);
 }

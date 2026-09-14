@@ -104,3 +104,12 @@ describe('Qualification and decisions', () => {
     expect(identityKeys(c)[0]).toBe('url:https://example.com/bid?id=42');
   });
 });
+
+it('moves expired uncertain listings out of recommendations while preserving pursuit decisions', () => {
+  const c = { ...fixtures[0]!, dueDate: '2026-09-01', dueAt: null, confidence: 'partial' as const };
+  const o = createOpportunity(c, 'expired', 'run', now);
+  expect(o.disposition).toBe('suppressed');
+  expect(o.readiness).toBe('blocked');
+  expect(viewOf(o)).toBe('filtered');
+  expect(viewOf({ ...o, status: 'pursue' })).toBe('pursuing');
+});
