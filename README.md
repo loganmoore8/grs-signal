@@ -2,7 +2,7 @@
 
 A lean internal procurement intelligence app for Guided Reach Solutions. Daily research discovers and qualifies public-sector contact-center modernization opportunities. The frontend has Recommended, Pursuing, and Filtered out views with a source-backed detail drawer.
 
-**Deployed; research access pending:** AWS infrastructure is provisioned in `us-west-2`. Production research uses Amazon Bedrock with IAM authentication. See [deployment status](docs/deployment-status.md) for live checks and remaining gates. The local preview contains clearly labeled fictional opportunities.
+**Deployed; research access pending:** AWS infrastructure is provisioned in `us-west-2`. Production research is configured for Amazon Nova 2 Lite with Bedrock web grounding and IAM authentication; an AWS Organizations policy currently blocks grounding. See [deployment status](docs/deployment-status.md) for live checks and remaining gates. The local preview contains clearly labeled fictional opportunities.
 
 ## Local quick start
 

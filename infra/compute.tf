@@ -41,7 +41,7 @@ resource "aws_lambda_function" "functions" {
   runtime                        = "nodejs22.x"
   filename                       = "${var.artifact_directory}/${each.key}.zip"
   source_code_hash               = filebase64sha256("${var.artifact_directory}/${each.key}.zip")
-  timeout                        = each.key == "research" ? 120 : 30
+  timeout                        = each.key == "research" ? 300 : 30
   memory_size                    = 256
   reserved_concurrent_executions = each.key == "research" ? 1 : 5
   environment {

@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { BedrockResearch } from '../services/research/provider';
 import { usageCost, reserve, settle, requestReservation } from '../services/research/budget';
 import { AwsStore } from '../packages/storage/aws';
@@ -15,14 +14,15 @@ const deployment = JSON.parse(
   }),
 );
 process.env.AWS_REGION = deployment.region;
-const provider = new BedrockResearch(deployment.region);
+
 process.env.OPPORTUNITIES_TABLE = deployment.opportunities_table;
 process.env.RUNS_TABLE = deployment.runs_table;
 process.env.HISTORY_TABLE = deployment.history_table;
 process.env.SNAPSHOTS_BUCKET = deployment.snapshots_bucket;
 const store = new AwsStore(),
   reservation = `deployment-smoke:${randomUUID()}`;
-if (!(await reserve(store, reservation, requestReservation(2), 2, now)))
+const provider = new BedrockResearch(store, deployment.region);
+if (!(await reserve(store, reservation, requestReservation(1), 1, now)))
   throw new Error('Research budget is exhausted; live check was not submitted.');
 console.log(`Budget reservation: ${reservation}`);
 const id = await provider
@@ -32,11 +32,17 @@ const id = await provider
       'Find one recent U.S. public-sector contact-center modernization procurement with official evidence.',
     windowDays: 30,
     now: now.toISOString(),
-    maxCalls: 2,
+    maxCalls: 1,
     known: [],
   })
   .catch(async (error: unknown) => {
-    if (error instanceof OpenAI.APIError && [400, 401, 403, 404, 422].includes(error.status || 0)) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      ['AccessDeniedException', 'ValidationException', 'ResourceNotFoundException'].includes(
+        (error as Error).name,
+      )
+    ) {
       await settle(store, reservation, 0, 0);
     }
     throw error;

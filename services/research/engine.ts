@@ -99,7 +99,7 @@ export async function startRun(store: Store, mode: 'local' | 'live', now = new D
     runId: id,
     status: 'queued',
     theme,
-    maxCalls: i === 3 ? 8 : 6,
+    maxCalls: 1,
   }));
   const run: Run = {
     id,
@@ -120,7 +120,13 @@ export async function startRun(store: Store, mode: 'local' | 'live', now = new D
   }
   return id;
 }
-export async function tick(store: Store, provider: ResearchProvider, now = new Date()) {
+export async function tick(
+  store: Store,
+  provider: ResearchProvider,
+  now = new Date(),
+  maxSubmissions = Infinity,
+) {
+  let submissions = 0;
   const runs = (await store.list<Run>('runs')).filter(
     (r) => r.id?.startsWith('run:') && r.status === 'running',
   );
@@ -132,7 +138,7 @@ export async function tick(store: Store, provider: ResearchProvider, now = new D
       const claimed = {
         ...job,
         version: job.version + 1,
-        leaseUntil: new Date(now.getTime() + 90000).toISOString(),
+        leaseUntil: new Date(now.getTime() + 330000).toISOString(),
       };
       try {
         await store.put('runs', job.id, claimed, job.version);
@@ -152,6 +158,10 @@ export async function tick(store: Store, provider: ResearchProvider, now = new D
         continue;
       }
       if (job.status === 'queued') {
+        if (submissions >= maxSubmissions) {
+          await save({});
+          continue;
+        }
         const reservationId = `${job.id}:attempt:${job.attempt || 0}`;
         const allowed = await reserve(
           store,
@@ -197,6 +207,7 @@ export async function tick(store: Store, provider: ResearchProvider, now = new D
             'Northeast and Mid-Atlantic: PA NY NJ DE MD DC CT RI MA VT NH ME',
           ];
           const dayNumber = Math.floor(now.getTime() / 86400000);
+          submissions++;
           const responseId = await provider.start({
             jobId: job.id,
             theme: job.theme,
@@ -270,7 +281,7 @@ export async function tick(store: Store, provider: ResearchProvider, now = new D
             await save({
               status: 'queued',
               attempt: 1,
-              maxCalls: 2,
+              maxCalls: 1,
               responseId: undefined,
               error: 'Retrying a known failed response within recovery allowance.',
             });

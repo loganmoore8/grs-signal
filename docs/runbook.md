@@ -39,7 +39,7 @@ Plans/state may contain sensitive infrastructure configuration. Do not commit or
 
 ## Configure the deployed application
 
-The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research authenticates to Amazon Bedrock using the worker IAM role, without an API key. Enable the `openai.gpt-5.6-terra` Bedrock model agreement in the deployment account before the live check.
+The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research authenticates to Amazon Bedrock using the worker IAM role, without an API key. The worker uses `us.amazon.nova-2-lite-v1:0` with native web grounding. Organization policies must permit both model invocation and `bedrock:InvokeTool` for the Nova grounding resource; see [the current access handoff](nova-access-handoff.md).
 
 ```sh
 npx tsx scripts/deployment.ts configure
@@ -49,7 +49,7 @@ npx tsx scripts/deployment.ts smoke
 
 `configure` sends invitations to the explicitly configured emails. `release-web` runs and checks the Amplify build. `smoke` verifies unauthenticated access rejection and a no-spend readiness guard. It does not prove the authenticated app or Bedrock integration.
 
-Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded Bedrock test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves the configured token allowance (currently $0.2176) and two calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if search was absent, the limit was exceeded, or no source-supported candidate was returned. Do not run it repeatedly or in CI. Validate actual compatibility, tool-limit enforcement, evidence and usage before declaring live research ready.
+Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded Bedrock test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves the configured token allowance (currently $0.05695) and one grounded request against the deployed ledger, settles returned usage and saves a snapshot. It fails if the result is incomplete, malformed, or has no source-supported candidate. Do not run it repeatedly or in CI. Validate actual compatibility, citation handling, evidence and usage before declaring live research ready.
 
 After live checks pass, set `LIVE_CHECKS_PASSED=true` and run:
 
@@ -65,9 +65,9 @@ Run `ALLOW_DEPLOYMENT_SETUP=true npx tsx scripts/cloud-storage-check.ts` to veri
 
 `npx tsx scripts/deployment.ts pause` disables paid worker activity while preserving frontend access. Schedules may still invoke the readiness check at negligible usage. To stop those invocations too, change `schedules_enabled` through a reviewed Terraform plan/apply.
 
-Inspect the latest `run:*` and `job:*` records in the Runs table and CloudWatch logs. Jobs in `polling` retain a provider response ID: continue retrieving that response, never start a replacement simply because retrieval failed. `uncertain` means submission outcome is unknown; its budget reservation remains charged conservatively. Reconcile with provider records before changing it. Known failed responses receive at most one bounded retry, with two recovery calls each and at most two jobs retried per run.
+Inspect the latest `run:*` and `job:*` records in the Runs table and CloudWatch logs. Jobs in `polling` retain a provider response ID: continue retrieving that response, never start a replacement simply because retrieval failed. `uncertain` means submission outcome is unknown; its budget reservation remains charged conservatively. Reconcile with provider records before changing it. Known failed responses receive at most one bounded retry, with one grounded request each and at most two jobs retried per run.
 
-Stalled responses expire after 60 minutes; cancellation is best effort and not a refund. A partial run keeps completed findings. Deferred candidates remain queued for subsequent daily work. Human notes/status/pass/restore fields must not be edited by recovery scripts.
+Nova submissions time out locally after 240 seconds. Only one is submitted per worker invocation. Completed results are stored durably and polling reads those records without another inference. A timeout cannot cancel or refund server-side work; its reservation is retained. A partial run keeps completed findings. Deferred candidates remain queued for subsequent daily work. Human notes/status/pass/restore fields must not be edited by recovery scripts.
 
 Send markers distinguish sent and uncertain email outcomes. Do not delete a marker to force a retry without inspecting delivery; SES can accept a message even if a caller times out.
 
@@ -75,7 +75,7 @@ Send markers distinguish sent and uncertain email outcomes. Do not delete a mark
 
 The authenticated `/health` response includes a combined forecast using the API ledger plus the $15 AWS allowance; actual AWS billing is explicitly unavailable there. A $55 forecast warning is sent once per calendar month. Compare with AWS billing during the pilot, avoiding double-counting the Bedrock ledger against billed Bedrock usage; this estimate is not a combined invoice or hard spending cutoff.
 
-Bedrock accounting uses actual reported tokens/tool calls and versioned rates. Daily reservations share $1.25 and 30 calls across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
+Bedrock accounting uses actual reported tokens and one grounding charge per request and versioned rates. Daily reservations share $1.25 and 30 grounded requests across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
 
 AWS's $15/month allowance is a planning target. Activate the `Project` cost allocation tag in the billing account for project filtering. Review attributable AWS charges alongside the API ledger; Bedrock charges are on the AWS bill. The existing $15 Project-tag budget covers infrastructure; reconcile Bedrock project usage separately because model charges may not inherit the Lambda Project tag. Verify the combined 30-day projection during the pilot. Raw evidence snapshots expire after 90 days and CloudWatch logs after 14 days. Compact facts/history remain with records.
 

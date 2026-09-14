@@ -87,7 +87,18 @@ it('requires authentication and preserves decisions through research', async () 
   expect((await store.get<Opportunity>('opportunities', o.id))?.status).toBe('pursue');
 });
 
-it('defers a Terra request when the remaining budget cannot cover its token allowance', async () => {
-  expect(await reserve(store, 'earlier-research', 1.05, 1, now)).toBe(true);
+it('defers a Nova request when the remaining budget cannot cover its token allowance', async () => {
+  expect(await reserve(store, 'earlier-research', 1.23, 1, now)).toBe(true);
   expect(await reserve(store, 'terra-retry', requestReservation(2), 2, now)).toBe(false);
+});
+
+it('limits synchronous submissions per worker tick and completes on subsequent ticks', async () => {
+  await startRun(store, 'live', now);
+  const p = new FakeProvider();
+  await tick(store, p, now, 1);
+  const jobs = await store.list<{ id: string; status: string }>('runs', 'job');
+  expect(jobs.filter((j) => j.status === 'polling')).toHaveLength(1);
+  expect(jobs.filter((j) => j.status === 'queued')).toHaveLength(3);
+  for (let i = 0; i < 5; i++) await tick(store, p, now, 1);
+  expect((await store.get<Run>('runs', 'run:2026-09-14'))?.status).toBe('completed');
 });

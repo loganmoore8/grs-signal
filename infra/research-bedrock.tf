@@ -7,21 +7,17 @@ resource "aws_iam_role_policy" "bedrock" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
-        Action    = ["bedrock-mantle:CreateInference"]
-        Resource  = "arn:aws:bedrock-mantle:${var.region}:${data.aws_caller_identity.current.account_id}:project/*"
-        Condition = { StringEquals = { "bedrock-mantle:Model" = jsondecode(file("${path.module}/../config/research.json")).model } }
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = concat(
+          ["arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${jsondecode(file("${path.module}/../config/research.json")).model}"],
+          [for region in ["us-east-1", "us-east-2", "us-west-2"] : "arn:aws:bedrock:${region}::foundation-model/amazon.nova-2-lite-v1:0"]
+        )
       },
       {
         Effect   = "Allow"
-        Action   = ["bedrock-mantle:GetInference", "bedrock-mantle:CancelInference"]
-        Resource = "arn:aws:bedrock-mantle:${var.region}:${data.aws_caller_identity.current.account_id}:project/*"
-      },
-      {
-        Effect    = "Allow"
-        Action    = ["bedrock-websearch:InvokeSearch", "bedrock-websearch:InvokeFetch", "bedrock-websearch:ExternalWebAccess"]
-        Resource  = "*"
-        Condition = { StringEquals = { "aws:RequestedRegion" = var.region } }
+        Action   = ["bedrock:InvokeTool"]
+        Resource = "arn:aws:bedrock::${data.aws_caller_identity.current.account_id}:system-tool/amazon.nova_grounding"
       }
     ]
   })
