@@ -10,6 +10,7 @@ import type { Store } from '../../packages/storage/store';
 import { AgentCoreSearch, type Search } from './search';
 import { fetchDocument, evidencePassages, type SourceDocument } from './documents';
 import config from '../../config/research.json';
+import { deadlineRank, currentDiscoveryCandidate } from './freshness';
 export type ResearchRequest = {
   jobId: string;
   theme: string;
@@ -94,7 +95,9 @@ export class BedrockResearch implements ResearchProvider {
     // Leave a search allowance for model-directed deadline/amendment checks.
     for (const query of researchQueries(r).slice(0, Math.min(3, Math.max(1, r.maxCalls - 2))))
       await searchOnce(query);
-    const initial = [...hits.values()].sort((a, b) => sourceRank(b) - sourceRank(a));
+    const initial = [...hits.values()].sort(
+      (a, b) => sourceRank(b) + deadlineRank(b, r.now) - (sourceRank(a) + deadlineRank(a, r.now)),
+    );
     for (const doc of initial.slice(0, 3)) await read(doc);
     const planner = await this.client.send(
       new ConverseCommand({
@@ -175,14 +178,18 @@ export class BedrockResearch implements ResearchProvider {
           fetched: false,
           checkedAt: r.now,
         });
-    const docs = [...hits.values()]
+    let docs = [...hits.values()]
+      .filter((d) => /recheck/i.test(r.theme) || deadlineRank(d, r.now) >= 0)
       .sort(
         (a, b) =>
+          deadlineRank(b, r.now) - deadlineRank(a, r.now) ||
           Number(plan.urls.includes(b.url)) - Number(plan.urls.includes(a.url)) ||
-          sourceRank(b) - sourceRank(a),
+          sourceRank(b) + deadlineRank(b, r.now) - (sourceRank(a) + deadlineRank(a, r.now)),
       )
       .slice(0, 8);
     for (const doc of docs) await read(doc);
+    const staleSources = docs.filter((d) => deadlineRank(d, r.now) < 0).map((d) => d.url);
+    if (!/recheck/i.test(r.theme)) docs = docs.filter((d) => deadlineRank(d, r.now) >= 0);
     // Follow relevant document links even if the search index omitted an attachment.
     for (const url of docs.filter((d) => sourceRank(d) >= 5).flatMap((d) => d.links || [])) {
       if (docs.length >= 10 || attempted.size >= 10) break;
@@ -214,7 +221,7 @@ export class BedrockResearch implements ResearchProvider {
           {
             text:
               SYSTEM_PROMPT +
-              '\nUse ONLY the supplied source material as evidence. Documents may be excerpted, not complete. fetched=false means a search snippet, never verified official state. Return at most 6 candidates. For discovery, return only current US SLED solicitations with material contact-center technology work and at least one exact source excerpt. Return an empty array when there are no suitable current solicitations. Do not populate the app with expired, foreign, federal, generic IT or staffing-only matches. For rechecks, include closed/excluded updates for the known records so they can be removed from recommendations. Explicitly check deadline and amendment evidence. A fetched excerpt does not prove that the latest amendment was checked. Do not claim verified state if the current notice or amendments remain unavailable. One candidate per solicitation; consolidate addenda as evidence. Compare deadlines with currentTime: a past deadline is not open, and never recommend submitting by a past date. whyFits and nextAction must be strings, even for excluded candidates. Excerpts must be verbatim from supplied text. Return JSON only, no markdown, using the configured output schema. state must be a two-letter US postal code. If the deadline time zone or UTC conversion is uncertain, leave dueAt and dueTimezone null and retain only dueDate. dueAt must be a full ISO timestamp with time and UTC offset, or null; date-only deadlines belong in dueDate. Never invent a solicitation number. Do not infer AWS platform selection from our consultancy expertise.',
+              '\nUse ONLY the supplied source material as evidence. Documents may be excerpted, not complete. fetched=false means a search snippet, never verified official state. Return at most 6 candidates. For discovery, return only current US SLED solicitations with material contact-center technology work and at least one exact source excerpt. A discovery candidate MUST have verbatim official-source evidence of a future proposal deadline or explicitly ongoing intake. Unknown dates, page crawl dates, publication dates, and contract performance dates do not establish an active bid. Never move an old deadline into the current year. Return an empty array when there are no suitable current solicitations. Do not populate the app with expired, foreign, federal, generic IT or staffing-only matches. For rechecks, include closed/excluded updates for the known records so they can be removed from recommendations. Explicitly check deadline and amendment evidence. A fetched excerpt does not prove that the latest amendment was checked. Do not claim verified state if the current notice or amendments remain unavailable. One candidate per solicitation; consolidate addenda as evidence. Compare deadlines with currentTime: a past deadline is not open, and never recommend submitting by a past date. whyFits and nextAction must be strings, even for excluded candidates. Excerpts must be verbatim from supplied text. Return JSON only, no markdown, using the configured output schema. state must be a two-letter US postal code. If the deadline time zone or UTC conversion is uncertain, leave dueAt and dueTimezone null and retain only dueDate. dueAt must be a full ISO timestamp with time and UTC offset, or null; date-only deadlines belong in dueDate. Never invent a solicitation number. Do not infer AWS platform selection from our consultancy expertise.',
           },
         ],
         messages: [
@@ -251,20 +258,14 @@ export class BedrockResearch implements ResearchProvider {
       sources: docs,
       calls,
       queries,
+      staleSources,
     });
     if (!response.usage) throw new Error('Provider omitted usage; reservation retained');
     const result = parseResearchResponse(response, docs, calls, r.now);
     result.inputTokens += planner.usage.inputTokens || 0;
     result.outputTokens += planner.usage.outputTokens || 0;
     if (!/recheck/i.test(r.theme))
-      result.candidates = result.candidates.filter(
-        (c) =>
-          !expired(c, new Date(r.now)) &&
-          !['closed', 'canceled', 'awarded'].includes(c.procurementState) &&
-          c.facts.inScopeBuyer &&
-          (!c.facts.excludedReason || c.facts.materialTechnologyPackage) &&
-          c.evidence.length > 0,
-      );
+      result.candidates = result.candidates.filter((c) => currentDiscoveryCandidate(c, r.now));
     const compact = { ...result, raw: undefined };
     if (Buffer.byteLength(JSON.stringify(compact)) > 300000) {
       compact.status = 'failed';
@@ -304,23 +305,34 @@ export function researchQueries(r: ResearchRequest) {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(r.now));
+  const months = [0, 1, 2].map((offset) => {
+    const d = new Date(r.now);
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + offset);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(d);
+  });
   if (/conversational|virtual agents/i.test(r.theme))
     return [
-      `"AI-powered" "phone" "RFP" ${year}`,
-      `"virtual agent" RFP ${year} site:gov`,
+      `"AI-powered" "phone" "RFP" deadline "${months[0]}"`,
+      `"virtual agent" RFP deadline "${months[1]}"`,
       `"contact center analytics" RFP ${year} site:gov`,
     ];
   if (/omnichannel|311/i.test(r.theme))
     return [
-      `"311 CRM" "RFP" ${year} city`,
-      `"omnichannel" RFP ${year} site:gov`,
+      `"311" "CRM" "RFP" deadline "${months[0]}"`,
+      `"omnichannel" RFP deadline "${months[1]}"`,
       `"CRM" "contact center" RFP ${year}`,
     ];
   return [
-    `"contact center" "RFP" ${year} deadline`,
-    `"call center" "RFP" ${year} public utility`,
+    `"contact center" "RFP" deadline "${months[1]}"`,
+    `"call center" "RFP" deadline "${months[0]}"`,
     `"contact center" RFP ${year} site:edu`,
     `"IVR" RFP ${year} site:gov`,
+    `"contact center" RFP deadline "${months[2]}"`,
   ];
 }
 

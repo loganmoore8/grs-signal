@@ -129,7 +129,10 @@ export function assess(c: Candidate, now = new Date()) {
   const inactive =
     expired(c, now) || ['closed', 'canceled', 'awarded'].includes(c.procurementState);
   const excluded =
-    inactive || !f.inScopeBuyer || Boolean(f.excludedReason && !f.materialTechnologyPackage);
+    inactive ||
+    (c.evidence.length === 0 && !c.dueDate && !c.dueAt && !c.ongoing) ||
+    !f.inScopeBuyer ||
+    Boolean(f.excludedReason && !f.materialTechnologyPackage);
   const incomplete =
     c.confidence !== 'supported' ||
     !c.officialUrl ||

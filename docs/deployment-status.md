@@ -36,3 +36,13 @@ One-time local validation allowed six additional searches within the dollar budg
 ## Deadline read guard — September 14, 2026
 
 Audited the saved records after a report of 2025 bids. University of Arizona L312501 is due April 30, 2025 and is already suppressed/Filtered out. Added a read-time deadline/closed-state guard to view classification: stale saved classifications and manual restores cannot put expired bids in Recommended. Explicit pursuit/submission history remains in Pursuing. Conflicting future dueAt cannot override a past dueDate. Regression checks: 81 tests and typecheck pass. Historical expired records remain available in Filtered out; they are not current leads.
+
+## Sonnet retrieval freshness — September 14, 2026
+
+Discovery now searches upcoming deadline months alongside broader year-based coverage. Explicit proposal deadlines rank above domain preference; publication/crawl timestamps and years in URLs are not deadline evidence. Fetched documents containing only past deadlines are omitted from final discovery qualification, with stale source URLs recorded in snapshots. Rechecks retain historical evidence. Evergreen pages with current and historical notices remain eligible.
+
+The discovery gate requires an exact retained official excerpt containing the candidate deadline date, or explicit ongoing intake. It rejects expired, undated, and invented-year candidates. This deliberately favors defensible current leads; unusual deadline formats may require manual verification. Evidence-free, undated legacy entries are suppressed during eligibility refresh. User pursuit decisions remain intact.
+
+Live six-query Sonnet check `provider:0330618e-8164-4f67-9195-bce4cdcce9fc` cost $0.1684005 and retained one existing SCF lead; no new distinct opportunities and no verified shortlist. Raw output also included an undated NC candidate which the discovery gate rejected. SCF amendment evidence reports September 22, while the saved September 15 deadline remains pending conflict resolution; do not treat either as verified. Replay of the captured evidence against the final date-matching gate retains only SCF. Actual web retrieval still encountered old PDFs; freshness checks prevent their promotion but do not demonstrate exhaustive market coverage.
+
+One-time validation allowance added six searches; production remains 30/day and $1.25/day. Day total after validation: $0.8317622, 42 searches, no remaining reservations. Typecheck, 86 tests, formatting and Lambda packaging pass.

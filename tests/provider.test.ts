@@ -258,3 +258,32 @@ it('reads explicit discovery leads without spending search calls', async () => {
   expect(fetchPage).toHaveBeenCalledWith(c.officialUrl);
   expect((await provider.poll(id)).candidates).toHaveLength(1);
 });
+
+it('removes fetched expired PDFs before final discovery qualification', async () => {
+  mocks.send
+    .mockResolvedValueOnce(response(JSON.stringify({ queries: [], urls: [] })))
+    .mockResolvedValueOnce(response());
+  const oldUrl = 'https://university.edu/2025/rfp.pdf';
+  const search = {
+    search: vi.fn().mockResolvedValue([
+      { url: oldUrl, title: 'Contact Center RFP', text: 'Contact Center RFP' },
+      { url: c.officialUrl, title: c.title, text },
+    ]),
+  };
+  const provider = new BedrockResearch(store, search, async (url) => ({
+    url,
+    text:
+      url === oldUrl ? 'Contact Center RFP. Due on April 30, 2025. ' + 'archive '.repeat(40) : text,
+  }));
+  await provider.start({
+    jobId: 'old-pdf',
+    theme: 'Connect',
+    windowDays: 30,
+    now,
+    maxCalls: 1,
+    known: [],
+  });
+  const payload = JSON.parse(mocks.send.mock.calls[1][0].input.messages[0].content[0].text);
+  expect(payload.sources.some((d: SourceDocument) => d.url === oldUrl)).toBe(false);
+  expect(payload.sources.some((d: SourceDocument) => d.url === c.officialUrl)).toBe(true);
+});
