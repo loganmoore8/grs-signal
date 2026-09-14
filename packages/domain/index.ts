@@ -155,7 +155,7 @@ export function localDay(now: Date, timezone = 'America/Los_Angeles') {
   }).format(now);
 }
 export function expired(o: Candidate, now: Date) {
-  if (o.dueAt) return new Date(o.dueAt).getTime() <= now.getTime();
+  if (o.dueAt && new Date(o.dueAt).getTime() <= now.getTime()) return true;
   if (!o.dueDate) return false;
   let day: string;
   try {
@@ -182,9 +182,11 @@ export function shortlistEligible(o: Opportunity, now = new Date()) {
     now.getTime() - new Date(o.verifiedAt!).getTime() <= scoring.freshHours * 3600000
   );
 }
-export function viewOf(o: Opportunity): View {
+export function viewOf(o: Opportunity, now = new Date()): View {
   if (['pursue', 'submitted', 'won', 'lost'].includes(o.status)) return 'pursuing';
   if (o.status === 'pass') return 'filtered';
+  if (expired(o, now) || ['closed', 'canceled', 'awarded'].includes(o.procurementState))
+    return 'filtered';
   if (o.restored) return 'recommended';
   return ['low_fit', 'suppressed'].includes(o.disposition) ? 'filtered' : 'recommended';
 }

@@ -113,3 +113,13 @@ it('moves expired uncertain listings out of recommendations while preserving pur
   expect(viewOf(o)).toBe('filtered');
   expect(viewOf({ ...o, status: 'pursue' })).toBe('pursuing');
 });
+
+it('filters expired bids at read time even when saved classification or restore is stale', () => {
+  const o = createOpportunity(fixtures[0]!, 'stale', 'run', now);
+  const stale = { ...o, dueDate: '2025-04-30', dueAt: null, disposition: 'recommended' as const };
+  expect(viewOf(stale, now)).toBe('filtered');
+  expect(viewOf({ ...stale, dueAt: '2027-04-30T13:00:00Z' }, now)).toBe('filtered');
+  expect(viewOf({ ...stale, restored: true }, now)).toBe('filtered');
+  expect(viewOf({ ...stale, status: 'pursue' }, now)).toBe('pursuing');
+  expect(viewOf({ ...o, procurementState: 'awarded', restored: true }, now)).toBe('filtered');
+});
