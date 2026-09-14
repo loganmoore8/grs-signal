@@ -55,7 +55,7 @@ if (action === 'configure') {
     }
   }
   console.log(
-    'Requested invitations processed. Bedrock uses the worker IAM role. Research remains gated.',
+    'Requested invitations processed. OpenAI credentials are loaded from Secrets Manager. Research remains gated.',
   );
 }
 if (action === 'enable' || action === 'pause') {

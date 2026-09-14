@@ -1,5 +1,5 @@
 {
-  "model": "us.amazon.nova-2-lite-v1:0",
+  "model": "gpt-5.6-terra",
   "timezone": "America/Los_Angeles",
   "schemaVersion": "1",
   "dailyUsd": 1.25,
@@ -7,18 +7,18 @@
   "dailyCalls": 30,
   "maxCandidates": 30,
   "maxQualified": 15,
-  "maxOutputTokens": 5000,
+  "maxOutputTokens": 8000,
   "prices": {
-    "inputPerMillion": 0.33,
-    "outputPerMillion": 2.75,
-    "searchCall": 0.03,
-    "version": "2026-09-14-nova-2-lite-us"
+    "inputPerMillion": 2,
+    "outputPerMillion": 12,
+    "searchCall": 0.01,
+    "version": "2026-09-14-openai-terra"
   },
   "themes": [
     "Amazon Connect, AWS professional services, CCaaS migration and IVR redesign",
     "Omnichannel, 311 citizen services and CRM/contact-center integration",
     "Contact-center conversational AI, virtual agents, knowledge, self-service and analytics"
   ],
-  "provider": "bedrock",
+  "provider": "openai",
   "reservationInputTokens": 40000
 }

@@ -99,7 +99,7 @@ export async function startRun(store: Store, mode: 'local' | 'live', now = new D
     runId: id,
     status: 'queued',
     theme,
-    maxCalls: 1,
+    maxCalls: i === 3 ? 8 : 6,
   }));
   const run: Run = {
     id,
@@ -281,7 +281,7 @@ export async function tick(
             await save({
               status: 'queued',
               attempt: 1,
-              maxCalls: 1,
+              maxCalls: 2,
               responseId: undefined,
               error: 'Retrying a known failed response within recovery allowance.',
             });

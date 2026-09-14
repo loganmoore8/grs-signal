@@ -87,7 +87,7 @@ it('requires authentication and preserves decisions through research', async () 
   expect((await store.get<Opportunity>('opportunities', o.id))?.status).toBe('pursue');
 });
 
-it('defers a Nova request when the remaining budget cannot cover its token allowance', async () => {
+it('defers a research request when the remaining budget cannot cover its token allowance', async () => {
   expect(await reserve(store, 'earlier-research', 1.23, 1, now)).toBe(true);
   expect(await reserve(store, 'terra-retry', requestReservation(2), 2, now)).toBe(false);
 });

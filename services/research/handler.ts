@@ -1,13 +1,14 @@
 import { AwsStore, required } from '../../packages/storage/aws';
-import { BedrockResearch } from './provider';
+import { OpenAIResearch } from './provider';
+import { configuredResearch } from './credentials';
 import { startRun, tick } from './engine';
 import { notify, SesMailer } from './alerts';
-let store: AwsStore, provider: BedrockResearch;
+let store: AwsStore, provider: OpenAIResearch;
 export async function handler(event: { action?: 'start' | 'tick' }) {
   store ??= new AwsStore();
   const readiness = await store.get<{ enabled: boolean }>('runs', 'runtime:readiness');
   if (!readiness?.enabled) return { status: 'not_ready', paidCalls: 0 };
-  provider ??= new BedrockResearch(store);
+  provider ??= await configuredResearch();
   const hour = Number(
     new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Los_Angeles',
