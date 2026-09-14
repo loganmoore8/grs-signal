@@ -53,3 +53,15 @@ it('finds amendment links and later PDF deadline passages', () => {
   expect(evidencePassages(text)).toContain('deadline extended to October 30');
   expect(evidencePassages(text).length).toBeLessThanOrEqual(6000);
 });
+
+it('keeps relevant attachments and addenda beyond the first twenty unrelated bids', () => {
+  const html =
+    Array.from({ length: 40 }, (_, i) => `<a href="/rfp-building-${i}.pdf">Building RFP</a>`).join(
+      '',
+    ) +
+    '<a href="/rfp-contact-center.pdf">Contact center RFP</a><a href="/addendum-2.pdf">Addendum 2</a>';
+  expect(procurementLinks(html, 'https://city.gov/bids').slice(0, 2)).toEqual([
+    'https://city.gov/rfp-contact-center.pdf',
+    'https://city.gov/addendum-2.pdf',
+  ]);
+});

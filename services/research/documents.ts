@@ -137,7 +137,11 @@ export function procurementLinks(html: string, base: string) {
       /* Ignore malformed links. */
     }
   });
-  return [...links].slice(0, 20);
+  // Prioritize scope documents and amendments before truncating a busy bid index.
+  const rank = (url: string) =>
+    (/contact[-_%20]*(?:center|centre)|call[-_%20]*center|ccaas|ivr/i.test(url) ? 4 : 0) +
+    (/addend|amend/i.test(url) ? 2 : 0);
+  return [...links].sort((a, b) => rank(b) - rank(a)).slice(0, 30);
 }
 // Keep the opening context and later relevant passages, not just the first PDF pages.
 export function evidencePassages(text: string, limit = 6000) {

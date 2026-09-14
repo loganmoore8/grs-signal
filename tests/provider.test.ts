@@ -14,7 +14,7 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => ({
     constructor(public input: unknown) {}
   },
 }));
-import { BedrockResearch, parseResearchResponse } from '../services/research/provider';
+import { BedrockResearch, parseResearchResponse, sourceRank } from '../services/research/provider';
 let dir: string, store: LocalStore;
 const now = '2026-09-14T12:00:00Z';
 const c = demoCandidates(new Date(now))[0]!;
@@ -189,4 +189,72 @@ it('keeps a date-only deadline without inventing midnight or a timezone', () => 
   expect(result.candidates[0]?.dueAt).toBeNull();
   expect(result.candidates[0]?.dueDate).toBe(c.dueDate);
   expect(result.candidates[0]?.dueTimezone).toBeNull();
+});
+
+it('covers evergreen non-government domains and retains material mixed technology bids', async () => {
+  const mixed = structuredClone(c);
+  mixed.facts.materialTechnologyPackage = true;
+  mixed.facts.excludedReason = 'Includes outsourced operations';
+  mocks.send
+    .mockResolvedValueOnce(response(JSON.stringify({ queries: [], urls: [] })))
+    .mockResolvedValueOnce(response(JSON.stringify({ candidates: [mixed] })));
+  const search = {
+    search: vi.fn().mockResolvedValue([{ url: c.officialUrl, title: c.title, text }]),
+  };
+  const provider = new BedrockResearch(store, search, async () => ({ url: c.officialUrl!, text }));
+  const id = await provider.start({
+    jobId: 'coverage',
+    theme: 'Connect',
+    windowDays: 30,
+    now,
+    maxCalls: 6,
+    known: [],
+  });
+  expect(search.search.mock.calls.every((args: unknown[]) => args[1] === undefined)).toBe(true);
+  expect(
+    search.search.mock.calls.some((args: unknown[]) => String(args[0]).includes('site:edu')),
+  ).toBe(true);
+  expect(
+    search.search.mock.calls.some((args: unknown[]) => String(args[0]).includes('"IVR"')),
+  ).toBe(true);
+  expect((await provider.poll(id)).candidates).toHaveLength(1);
+});
+
+it('ranks relevant public utility notices above unrelated government grants', () => {
+  const utility = {
+    url: 'https://utility.org/solicitations',
+    title: 'Data Manager and Customer Contact Center RFP',
+    text: 'Response deadline October 2, 2026',
+    fetched: false,
+    checkedAt: now,
+  };
+  const grant = {
+    url: 'https://agency.gov/connect/grants',
+    title: 'Peer respite RFP',
+    text: 'Behavioral health grants',
+    fetched: false,
+    checkedAt: now,
+  };
+  expect(sourceRank(utility)).toBeGreaterThan(sourceRank(grant));
+});
+
+it('reads explicit discovery leads without spending search calls', async () => {
+  mocks.send
+    .mockResolvedValueOnce(response(JSON.stringify({ queries: [], urls: [] })))
+    .mockResolvedValueOnce(response());
+  const search = { search: vi.fn() };
+  const fetchPage = vi.fn().mockResolvedValue({ url: c.officialUrl, text });
+  const provider = new BedrockResearch(store, search, fetchPage);
+  const id = await provider.start({
+    jobId: 'direct',
+    theme: 'Connect',
+    windowDays: 30,
+    now,
+    maxCalls: 0,
+    known: [],
+    sourceUrls: [c.officialUrl!],
+  });
+  expect(search.search).not.toHaveBeenCalled();
+  expect(fetchPage).toHaveBeenCalledWith(c.officialUrl);
+  expect((await provider.poll(id)).candidates).toHaveLength(1);
 });
