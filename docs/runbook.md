@@ -39,7 +39,7 @@ Plans/state may contain sensitive infrastructure configuration. Do not commit or
 
 ## Configure the deployed application
 
-The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research uses `gpt-5.6-terra` directly through the OpenAI Responses API. Save the API key as the plaintext value of `grs-signal/openai` in Secrets Manager. Terraform manages only the secret metadata and worker read permission. Never put the key in source, Terraform inputs, command-line arguments or logs. The current key authenticates but its API organization requires credits; see [deployment status](deployment-status.md).
+The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research uses `openai.gpt-oss-120b-1:0` through Bedrock Converse and AgentCore Web Search in `us-east-1`. Terraform provisions the IAM-authenticated gateway and connector, and grants the worker only the model and gateway invocation permissions. No API key is needed.
 
 ```sh
 npx tsx scripts/deployment.ts configure
@@ -49,7 +49,7 @@ npx tsx scripts/deployment.ts smoke
 
 `configure` sends invitations to the explicitly configured emails. `release-web` runs and checks the Amplify build. `smoke` verifies unauthenticated access rejection and a no-spend readiness guard. It does not prove the authenticated app or Bedrock integration.
 
-Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded OpenAI test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves the configured token allowance (currently $0.196) and two search calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if the result is incomplete, malformed, or has no source-supported candidate. Do not run it repeatedly or in CI. Validate actual compatibility, citation handling, evidence and usage before declaring live research ready.
+Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded Bedrock/search test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves the configured token allowance (currently $0.02482) and two search calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if the result is incomplete, malformed, or exceeds the search-call bound. Schema-valid empty or partial findings pass the operational check; inspect evidence separately and evaluate coverage during the pilot. Do not run it repeatedly or in CI. Validate actual compatibility, citation handling, evidence and usage before declaring live research ready.
 
 After live checks pass, set `LIVE_CHECKS_PASSED=true` and run:
 
@@ -67,17 +67,17 @@ Run `ALLOW_DEPLOYMENT_SETUP=true npx tsx scripts/cloud-storage-check.ts` to veri
 
 Inspect the latest `run:*` and `job:*` records in the Runs table and CloudWatch logs. Jobs in `polling` retain a provider response ID: continue retrieving that response, never start a replacement simply because retrieval failed. `uncertain` means submission outcome is unknown; its budget reservation remains charged conservatively. Reconcile with provider records before changing it. Known failed responses receive at most one bounded retry, with two search calls each and at most two jobs retried per run.
 
-The provider creates background responses with a 15-second submission timeout. Only one is submitted per worker invocation; subsequent ticks retrieve the stored response ID. A submission timeout is ambiguous and retains its reservation. Pending responses expire after 60 minutes; cancellation is best effort, not a refund. A partial run keeps completed findings. Deferred candidates remain queued for subsequent daily work. Human notes/status/pass/restore fields must not be edited by recovery scripts.
+The provider completes search, bounded document retrieval and synchronous inference, then saves the result before returning an ID. Only one is submitted per worker invocation. Subsequent ticks read that result without another paid call. The model call has a 120-second client timeout; Lambda has a 300-second timeout and job leases last 330 seconds. Timeouts retain the reservation; no blind replay occurs. A partial run keeps completed findings. Deferred candidates remain queued for subsequent daily work. Human notes/status/pass/restore fields must not be edited by recovery scripts.
 
 Send markers distinguish sent and uncertain email outcomes. Do not delete a marker to force a retry without inspecting delivery; SES can accept a message even if a caller times out.
 
 ## Costs and retention
 
-The authenticated `/health` response includes a combined forecast using the API ledger plus the $15 AWS allowance; actual AWS billing is explicitly unavailable there. A $55 forecast warning is sent once per calendar month. Compare with AWS billing during the pilot, including both direct OpenAI API charges and AWS infrastructure; this estimate is not a combined invoice or hard spending cutoff.
+The authenticated `/health` response includes a combined forecast using the API ledger plus the $15 AWS allowance; actual AWS billing is explicitly unavailable there. A $55 forecast warning is sent once per calendar month. Compare with AWS billing during the pilot, reconciling model/search charges with the ledger without double-counting them; this estimate is not a combined invoice or hard spending cutoff.
 
-OpenAI accounting uses actual reported tokens and web-search calls and versioned rates. Daily reservations share $1.25 and 30 search calls across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
+Bedrock accounting uses actual reported tokens and AgentCore search calls and versioned rates. Daily reservations share $1.25 and 30 search calls across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
 
-AWS's $15/month allowance is a planning target. Activate the `Project` cost allocation tag in the billing account for project filtering. Review attributable AWS charges alongside the API ledger; Direct OpenAI API charges are separate from AWS billing. The existing $15 Project-tag budget covers infrastructure; reconcile OpenAI API usage with the OpenAI billing dashboard. Verify the combined 30-day projection during the pilot. Raw evidence snapshots expire after 90 days and CloudWatch logs after 14 days. Compact facts/history remain with records.
+AWS's $15/month allowance is a planning target. Activate the `Project` cost allocation tag in the billing account for project filtering. Review attributable AWS charges alongside the API ledger; Model and AgentCore search charges appear on the AWS bill. The existing $15 Project-tag budget covers infrastructure; reconcile Bedrock and AgentCore usage with AWS billing. Verify the combined 30-day projection during the pilot. Raw evidence snapshots expire after 90 days and CloudWatch logs after 14 days. Compact facts/history remain with records.
 
 ## Rollback
 

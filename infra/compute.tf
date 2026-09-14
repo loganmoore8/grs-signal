@@ -53,7 +53,8 @@ resource "aws_lambda_function" "functions" {
       ALERT_SENDER        = var.alert_sender
       ALERT_RECIPIENTS    = join(",", var.alert_recipients)
       APP_URL             = local.app_url
-      OPENAI_SECRET_ID    = aws_secretsmanager_secret.openai.arn
+      SEARCH_GATEWAY_URL  = aws_bedrockagentcore_gateway.search.gateway_url
+      SEARCH_REGION       = "us-east-1"
     }
   }
   depends_on = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.logs, aws_iam_role_policy.data]

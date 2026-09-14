@@ -1,82 +1,167 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { demoCandidates } from './fixtures/opportunities';
-const mocks = vi.hoisted(() => ({ create: vi.fn(), retrieve: vi.fn(), cancel: vi.fn() }));
-vi.mock('openai', () => ({
-  default: class {
-    responses = mocks;
+import { LocalStore } from '../packages/storage/local';
+import type { SourceDocument } from '../services/research/documents';
+const mocks = vi.hoisted(() => ({ send: vi.fn() }));
+vi.mock('@aws-sdk/client-bedrock-runtime', () => ({
+  BedrockRuntimeClient: class {
+    send = mocks.send;
+  },
+  ConverseCommand: class {
+    constructor(public input: unknown) {}
   },
 }));
-import { OpenAIResearch } from '../services/research/provider';
-const now = new Date('2026-09-01T12:00:00Z');
-beforeEach(() => vi.clearAllMocks());
-it('constructs a bounded background request with required search and a strict schema', async () => {
-  mocks.create.mockResolvedValue({ id: 'response-1' });
-  expect(
-    await new OpenAIResearch('test-key').start({
-      jobId: 'a',
-      theme: 'Connect',
-      windowDays: 7,
-      now: now.toISOString(),
-      maxCalls: 6,
-      known: [],
-    }),
-  ).toBe('response-1');
-  expect(JSON.stringify(mocks.create.mock.calls[0]![0].text.format.schema)).not.toContain(
-    '"format":"uri"',
+import { BedrockResearch, parseResearchResponse } from '../services/research/provider';
+let dir: string, store: LocalStore;
+const now = '2026-09-14T12:00:00Z';
+const c = demoCandidates(new Date(now))[0]!;
+const text = c.evidence.map((e) => e.excerpt).join(' ') + ' '.repeat(210);
+const docs: SourceDocument[] = [
+  { url: c.officialUrl!, title: c.title, text, fetched: true, checkedAt: now },
+];
+function response(output = JSON.stringify({ candidates: [c] })) {
+  return {
+    $metadata: {},
+    metrics: { latencyMs: 10 },
+    usage: { inputTokens: 2000, outputTokens: 1000, totalTokens: 3000 },
+    stopReason: 'end_turn' as const,
+    output: { message: { role: 'assistant' as const, content: [{ text: output }] } },
+  };
+}
+beforeEach(async () => {
+  vi.clearAllMocks();
+  dir = await mkdtemp(join(tmpdir(), 'oss-test-'));
+  store = new LocalStore(dir);
+});
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
+it('bounds searches and retrieves durable results across restarts without repeating inference', async () => {
+  mocks.send.mockResolvedValue(response());
+  const search = {
+    search: vi.fn().mockResolvedValue([{ url: c.officialUrl, title: c.title, text }]),
+  };
+  const fetchPage = vi.fn().mockResolvedValue({ url: c.officialUrl, text });
+  const p = new BedrockResearch(store, search, fetchPage);
+  const id = await p.start({
+    jobId: 'test',
+    theme: 'Connect',
+    windowDays: 30,
+    now,
+    maxCalls: 2,
+    known: [],
+  });
+  expect((await new BedrockResearch(new LocalStore(dir), search).poll(id)).status).toBe(
+    'completed',
   );
-  expect(mocks.create.mock.calls[0]![0]).toMatchObject({
-    background: true,
-    max_tool_calls: 6,
-    max_output_tokens: 8000,
-    tool_choice: 'required',
-    text: { format: { strict: true } },
+  expect(search.search).toHaveBeenCalledTimes(2);
+  expect(mocks.send).toHaveBeenCalledTimes(1);
+  expect(mocks.send.mock.calls[0][0].input).toMatchObject({
+    modelId: 'openai.gpt-oss-120b-1:0',
+    inferenceConfig: { maxTokens: 8000 },
   });
 });
-it('downgrades invented source URLs even if output claims source support', async () => {
-  mocks.retrieve.mockResolvedValue({
-    status: 'completed',
-    output: [],
-    usage: { input_tokens: 2000, output_tokens: 1000 },
-    output_text: JSON.stringify({ candidates: [demoCandidates(now)[0]] }),
-  });
-  const result = await new OpenAIResearch('test-key').poll('r');
-  expect(result.candidates[0]?.confidence).toBe('partial');
-  expect(result.candidates[0]?.verifiedAt).toBeNull();
+it('downgrades snippets and removes invented excerpts', () => {
+  const r = parseResearchResponse(
+    response(),
+    docs.map((d) => ({ ...d, fetched: false })),
+    2,
+    now,
+  );
+  expect(r.candidates[0]?.confidence).toBe('partial');
+  expect(r.candidates[0]?.verifiedAt).toBeNull();
+  const invented = {
+    ...c,
+    evidence: c.evidence.map((e) => ({
+      ...e,
+      excerpt: 'This invented excerpt is absent from all fetched sources.',
+    })),
+  };
+  expect(
+    parseResearchResponse(response(JSON.stringify({ candidates: [invented] })), docs, 2, now)
+      .candidates[0]?.evidence,
+  ).toHaveLength(0);
 });
-it('preserves returned source references and usage for supported results', async () => {
-  const c = demoCandidates(now)[0]!;
-  mocks.retrieve.mockResolvedValue({
+it('preserves verified source excerpts and usage', () => {
+  expect(parseResearchResponse(response(), docs, 2, now)).toMatchObject({
     status: 'completed',
-    usage: { input_tokens: 2000, output_tokens: 1000 },
-    output: [{ type: 'web_search_call', action: { sources: [{ url: c.officialUrl }] } }],
-    output_text: JSON.stringify({ candidates: [c] }),
+    inputTokens: 2000,
+    outputTokens: 1000,
+    calls: 2,
   });
-  const result = await new OpenAIResearch('test-key').poll('r');
-  expect(result.candidates[0]?.confidence).toBe('supported');
-  expect(result).toMatchObject({ inputTokens: 2000, outputTokens: 1000, calls: 1 });
+  expect(parseResearchResponse(response(), docs, 2, now).candidates[0]?.confidence).toBe(
+    'supported',
+  );
 });
-it('rejects malformed output without losing usage accounting', async () => {
-  mocks.retrieve.mockResolvedValue({
-    status: 'completed',
-    usage: { input_tokens: 2000 },
-    output: [],
-    output_text: '{bad',
-  });
-  expect(await new OpenAIResearch('test-key').poll('r')).toMatchObject({
+it('preserves costs when output is malformed or truncated', () => {
+  expect(parseResearchResponse(response('{bad'), docs, 2, now)).toMatchObject({
     status: 'failed',
     inputTokens: 2000,
-    candidates: [],
+    calls: 2,
   });
+  expect(
+    parseResearchResponse({ ...response(), stopReason: 'max_tokens' }, docs, 2, now).status,
+  ).toBe('failed');
+});
+it('does not return an id when durable storage fails', async () => {
+  mocks.send.mockResolvedValue(response());
+  vi.spyOn(store, 'put').mockRejectedValue(new Error('storage unavailable'));
+  const p = new BedrockResearch(store, { search: async () => [] });
+  await expect(
+    p.start({ jobId: 'test', theme: 'Connect', windowDays: 30, now, maxCalls: 1, known: [] }),
+  ).rejects.toThrow('storage unavailable');
+  expect(mocks.send).toHaveBeenCalledTimes(1);
+});
+it('missing usage retains the reservation instead of declaring zero cost', async () => {
+  mocks.send.mockResolvedValue({ ...response(), usage: undefined });
+  const p = new BedrockResearch(store, { search: async () => [] });
+  await expect(
+    p.start({ jobId: 'test', theme: 'Connect', windowDays: 30, now, maxCalls: 1, known: [] }),
+  ).rejects.toThrow('omitted usage');
+});
+it('does not allow an open listing with a past deadline to become actionable', () => {
+  const stale = {
+    ...c,
+    dueDate: '2026-09-02',
+    dueAt: null,
+    procurementState: 'open',
+    ongoing: true,
+  };
+  const result = parseResearchResponse(
+    response(JSON.stringify({ candidates: [stale] })),
+    docs,
+    2,
+    now,
+  );
+  expect(result.candidates[0]).toMatchObject({
+    procurementState: 'unknown',
+    ongoing: false,
+    confidence: 'partial',
+    verifiedAt: null,
+  });
+  expect(result.candidates[0]?.nextAction).toContain('extension or closure');
+});
+it('accepts a duplicated runtime opening delimiter without relaxing field validation', () => {
+  expect(
+    parseResearchResponse(response('{\n' + JSON.stringify({ candidates: [c] })), docs, 2, now)
+      .status,
+  ).toBe('completed');
+  expect(
+    parseResearchResponse(
+      response('{\n' + JSON.stringify({ candidates: [{ ...c, state: 'North Carolina' }] })),
+      docs,
+      2,
+      now,
+    ).status,
+  ).toBe('failed');
 });
 
-it('keeps an existing response id during background polling', async () => {
-  mocks.retrieve.mockResolvedValue({ status: 'in_progress', output: [] });
-  expect(await new OpenAIResearch('test-key').poll('existing')).toMatchObject({
-    status: 'pending',
-  });
-  expect(mocks.create).not.toHaveBeenCalled();
-});
-it('retains the reservation if a completed response has no usage', async () => {
-  mocks.retrieve.mockResolvedValue({ status: 'completed', output: [] });
-  await expect(new OpenAIResearch('test-key').poll('existing')).rejects.toThrow('omitted usage');
+it('accepts the runtime array prefix while retaining the strict object schema', () => {
+  expect(
+    parseResearchResponse(response('[\n' + JSON.stringify({ candidates: [c] })), docs, 2, now)
+      .status,
+  ).toBe('completed');
 });

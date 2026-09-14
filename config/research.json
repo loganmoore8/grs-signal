@@ -1,5 +1,5 @@
 {
-  "model": "gpt-5.6-terra",
+  "model": "openai.gpt-oss-120b-1:0",
   "timezone": "America/Los_Angeles",
   "schemaVersion": "1",
   "dailyUsd": 1.25,
@@ -9,16 +9,16 @@
   "maxQualified": 15,
   "maxOutputTokens": 8000,
   "prices": {
-    "inputPerMillion": 2,
-    "outputPerMillion": 12,
-    "searchCall": 0.01,
-    "version": "2026-09-14-openai-terra"
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6,
+    "searchCall": 0.00701,
+    "version": "2026-09-14-oss120b-agentcore"
   },
   "themes": [
     "Amazon Connect, AWS professional services, CCaaS migration and IVR redesign",
     "Omnichannel, 311 citizen services and CRM/contact-center integration",
     "Contact-center conversational AI, virtual agents, knowledge, self-service and analytics"
   ],
-  "provider": "openai",
+  "provider": "bedrock",
   "reservationInputTokens": 40000
 }

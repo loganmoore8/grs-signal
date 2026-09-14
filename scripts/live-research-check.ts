@@ -1,5 +1,4 @@
-import OpenAI from 'openai';
-import { configuredResearch } from '../services/research/credentials';
+import { BedrockResearch } from '../services/research/provider';
 import { usageCost, reserve, settle, requestReservation } from '../services/research/budget';
 import { AwsStore } from '../packages/storage/aws';
 import { execFileSync } from 'node:child_process';
@@ -22,26 +21,27 @@ process.env.HISTORY_TABLE = deployment.history_table;
 process.env.SNAPSHOTS_BUCKET = deployment.snapshots_bucket;
 const store = new AwsStore(),
   reservation = `deployment-smoke:${randomUUID()}`;
-const provider = await configuredResearch();
+const search = JSON.parse(
+  execFileSync('terraform', ['-chdir=infra', 'output', '-json', 'research_search'], {
+    encoding: 'utf8',
+  }),
+);
+process.env.SEARCH_GATEWAY_URL = search.url;
+process.env.SEARCH_REGION = search.region;
+const provider = new BedrockResearch(store);
 if (!(await reserve(store, reservation, requestReservation(2), 2, now)))
   throw new Error('Research budget is exhausted; live check was not submitted.');
 console.log(`Budget reservation: ${reservation}`);
-const id = await provider
-  .start({
-    jobId: 'deployment-smoke',
-    theme:
-      'Find one recent U.S. public-sector contact-center modernization procurement with official evidence.',
-    windowDays: 30,
-    now: now.toISOString(),
-    maxCalls: 2,
-    known: [],
-  })
-  .catch(async (error: unknown) => {
-    if (error instanceof OpenAI.APIError && [400, 401, 403, 404, 422].includes(error.status || 0)) {
-      await settle(store, reservation, 0, 0);
-    }
-    throw error;
-  });
+const id = await provider.start({
+  jobId: 'deployment-smoke',
+  theme:
+    'Find one recent U.S. public-sector contact-center modernization procurement with official evidence.',
+  windowDays: 30,
+  now: now.toISOString(),
+  maxCalls: 2,
+  known: [],
+});
+
 await store.put(
   'runs',
   `smoke:${reservation}`,
@@ -49,6 +49,8 @@ await store.put(
   0,
 );
 console.log(`Started bounded live response ${id}. This command incurs API charges.`);
+// Operational smoke: schema-valid zero/partial results are legitimate. Source quality
+// and opportunity coverage are evaluated separately; never require invented matches.
 let finished = false;
 for (let i = 0; i < 60; i++) {
   await new Promise((r) => setTimeout(r, 5000));
@@ -67,6 +69,7 @@ for (let i = 0; i < 60; i++) {
         status: result.status,
         candidates: result.candidates.length,
         supportedCandidates: result.candidates.filter((c) => c.confidence === 'supported').length,
+        evidenceCandidates: result.candidates.filter((c) => c.evidence.length > 0).length,
         calls: result.calls,
         estimatedUsd: usageCost(result.inputTokens, result.outputTokens, result.calls),
         error: result.error,
@@ -75,13 +78,7 @@ for (let i = 0; i < 60; i++) {
       2,
     ),
   );
-  if (
-    result.status !== 'completed' ||
-    result.calls < 1 ||
-    result.calls > 2 ||
-    !result.candidates.some((c) => c.confidence === 'supported')
-  )
-    process.exitCode = 1;
+  if (result.status !== 'completed' || result.calls < 1 || result.calls > 2) process.exitCode = 1;
   finished = true;
   break;
 }

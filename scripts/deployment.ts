@@ -55,7 +55,7 @@ if (action === 'configure') {
     }
   }
   console.log(
-    'Requested invitations processed. OpenAI credentials are loaded from Secrets Manager. Research remains gated.',
+    'Requested invitations processed. Bedrock and AgentCore use the worker IAM role. Research remains gated.',
   );
 }
 if (action === 'enable' || action === 'pause') {
