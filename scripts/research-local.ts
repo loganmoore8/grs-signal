@@ -1,0 +1,12 @@
+import { LocalStore } from '../packages/storage/local';
+import { startRun, tick } from '../services/research/engine';
+import { FakeProvider } from '../tests/local/fake-provider';
+import { CaptureMailer } from '../tests/local/capture-mailer';
+import { notify } from '../services/research/alerts';
+const store = new LocalStore();
+await startRun(store, 'local');
+await tick(store, new FakeProvider());
+await tick(store, new FakeProvider());
+console.log('Local research simulation complete. No external API calls.');
+await notify(store, new CaptureMailer(store), 'http://127.0.0.1:3000');
+console.log('Any meaningful alerts were captured under .local/snapshots/mail; no email was sent.');

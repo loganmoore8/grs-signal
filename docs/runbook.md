@@ -1,0 +1,82 @@
+# GRS Signal operating runbook
+
+## Build first
+
+Complete local checks and generate artifacts. The repository must be committed/pushed to the configured Amplify repository before the final hosted build. No apply, cloud environment, paid research, or real email delivery is part of ordinary development.
+
+Use Node 22.14+ and the committed npm/provider lockfiles. Terraform HCL targets Terraform 1.14+ and AWS provider 6.x. Run:
+
+```sh
+npm ci
+npm run check
+npm run build
+terraform -chdir=infra fmt -check -recursive
+terraform -chdir=infra init -backend=false
+terraform -chdir=infra validate
+```
+
+## Final deployment prerequisites
+
+1. AWS credentials/profile with deployment access; choose `us-west-2` unless there is a reason to change it.
+2. Copy `infra/terraform.tfvars.example` into ignored `infra/terraform.tfvars` and enter repository, branch, unique Cognito prefix, sender, and recipients.
+3. Ensure Amplify's GitHub app is authorized for the repository. No repository token is stored in Terraform. If the account/repository connection requires setup, complete it at deployment time before applying hosting resources.
+4. Use an existing protected remote Terraform backend if available. Otherwise the first deployment uses protected local state; keep it out of git, restrict access, back it up securely, and migrate to a protected shared backend before another operator uses Terraform. Do not create a bootstrap environment during the local build.
+5. Verify the SES sender email when AWS issues the verification request. In the SES sandbox, recipients must also be verified; production access is an account prerequisite if needed. Application automation does not eliminate one-time account verification.
+6. Build Lambda ZIPs and retain the exact artifacts used by the plan. Terraform must be replanned if artifacts or inputs change.
+7. Confirm the SNS email subscriptions for operational recipients. These cover worker failures separately from application SES digests.
+
+## Plan and apply at the end
+
+```sh
+terraform -chdir=infra init
+terraform -chdir=infra plan -out=release.tfplan
+terraform -chdir=infra show release.tfplan
+# Final infrastructure deployment only:
+terraform -chdir=infra apply release.tfplan
+```
+
+Plans/state may contain sensitive infrastructure configuration. Do not commit or publish them. Review IAM, hosting URLs, callback URLs, schedule targets, resource retention, and anticipated costs. The configuration protects opportunities/history/evidence from accidental destruction.
+
+## Configure the deployed application
+
+The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply `OPENAI_API_KEY` through a secure process environment and optional comma-separated `INVITE_EMAILS`; never put the key in command arguments, Terraform variables, logs, or a frontend variable.
+
+```sh
+npx tsx scripts/deployment.ts configure
+npx tsx scripts/deployment.ts release-web
+npx tsx scripts/deployment.ts smoke
+```
+
+`configure` writes the secret and sends invitations to the explicitly configured emails. `release-web` runs and checks the Amplify build. `smoke` verifies unauthenticated access rejection and a no-spend readiness guard. It does not prove the authenticated app or OpenAI integration.
+
+Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded OpenAI test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves $0.15 and two calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if search was absent, the limit was exceeded, or no source-supported candidate was returned. Do not run it repeatedly or in CI. Validate actual compatibility, tool-limit enforcement, evidence and usage before declaring live research ready.
+
+After live checks pass, set `LIVE_CHECKS_PASSED=true` and run:
+
+```sh
+npx tsx scripts/deployment.ts enable
+```
+
+The next daily schedule starts research. Runtime readiness is persisted application data, not Terraform-managed infrastructure. The normal workflow needs no manual input or daily command.
+
+## Pause and recover
+
+`npx tsx scripts/deployment.ts pause` disables paid worker activity while preserving frontend access. Schedules may still invoke the readiness check at negligible usage. To stop those invocations too, change `schedules_enabled` through a reviewed Terraform plan/apply.
+
+Inspect the latest `run:*` and `job:*` records in the Runs table and CloudWatch logs. Jobs in `polling` retain a provider response ID: continue retrieving that response, never start a replacement simply because retrieval failed. `uncertain` means submission outcome is unknown; its budget reservation remains charged conservatively. Reconcile with provider records before changing it. Known failed responses receive at most one bounded retry, with two recovery calls each and at most two jobs retried per run.
+
+Stalled responses expire after 60 minutes; cancellation is best effort and not a refund. A partial run keeps completed findings. Deferred candidates remain queued for subsequent daily work. Human notes/status/pass/restore fields must not be edited by recovery scripts.
+
+Send markers distinguish sent and uncertain email outcomes. Do not delete a marker to force a retry without inspecting delivery; SES can accept a message even if a caller times out.
+
+## Costs and retention
+
+The authenticated `/health` response includes a combined forecast using the API ledger plus the $15 AWS allowance; actual AWS billing is explicitly unavailable there. A $55 forecast warning is sent once per calendar month. Compare with AWS billing during the pilot; this estimate is not a combined invoice or hard spending cutoff.
+
+OpenAI accounting uses actual reported tokens/tool calls and versioned rates. Daily reservations share $1.25 and 30 calls across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
+
+AWS's $15/month allowance is a planning target. Activate the `Project` cost allocation tag in the billing account for project filtering. Review attributable AWS charges alongside the API ledger; AWS Budgets does not include OpenAI spending. Verify the combined 30-day projection during the pilot. Raw evidence snapshots expire after 90 days and CloudWatch logs after 14 days. Compact facts/history remain with records.
+
+## Rollback
+
+Pause research, restore the previous application commit and its artifact ZIPs, review a fresh Terraform plan, and apply only the intended infrastructure/code updates. Rebuild the hosted frontend from the matching commit. Do not destroy tables or evidence buckets to roll back code. Schema changes must remain compatible with retained records or include a separately tested migration.

@@ -1,0 +1,9 @@
+variable "region" { default = "us-west-2" }
+variable "name" { default = "grs-signal" }
+variable "repository_url" { type = string }
+variable "branch" { default = "main" }
+variable "cognito_domain_prefix" { type = string }
+variable "alert_sender" { type = string }
+variable "alert_recipients" { type = list(string) }
+variable "artifact_directory" { default = "../dist" }
+variable "schedules_enabled" { default = true }

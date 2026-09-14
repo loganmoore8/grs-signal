@@ -1,0 +1,53 @@
+{
+  "name": "grs-signal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "dev:web": "next dev apps/web --hostname 127.0.0.1",
+    "dev:api": "tsx scripts/local-server.ts",
+    "demo:seed": "tsx scripts/seed.ts",
+    "demo:research": "tsx scripts/research-local.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build:web": "next build apps/web",
+    "build:services": "tsx scripts/package.ts",
+    "build": "tsx scripts/build.ts",
+    "check": "tsx scripts/check.ts",
+    "format": "prettier --write apps packages services scripts tests config *.json *.ts",
+    "lint": "prettier --check apps packages services scripts tests config *.json *.ts",
+    "infra:validate": "terraform -chdir=infra init -backend=false && terraform -chdir=infra validate"
+  },
+  "dependencies": {
+    "@aws-sdk/client-amplify": "3.1131.0",
+    "@aws-sdk/client-cognito-identity-provider": "3.1131.0",
+    "@aws-sdk/client-dynamodb": "3.1131.0",
+    "@aws-sdk/client-lambda": "3.1131.0",
+    "@aws-sdk/client-s3": "3.1131.0",
+    "@aws-sdk/client-secrets-manager": "3.1131.0",
+    "@aws-sdk/client-ses": "3.1131.0",
+    "@aws-sdk/lib-dynamodb": "3.1131.0",
+    "next": "16.3.5",
+    "oidc-client-ts": "3.5.0",
+    "openai": "7.15.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.163",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
+    "fflate": "0.8.3",
+    "prettier": "3.9.6",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  }
+}

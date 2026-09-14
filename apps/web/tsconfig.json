@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": true },
+  "include": ["**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "../../packages/domain/**/*.ts"],
+  "exclude": ["node_modules"]
+}

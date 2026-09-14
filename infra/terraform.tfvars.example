@@ -1,0 +1,6 @@
+repository_url = "https://github.com/loganmoore8/grs-signal"
+cognito_domain_prefix = "grs-signal-CHOOSE-UNIQUE-PREFIX"
+alert_sender = "notifications@YOUR-DOMAIN"
+alert_recipients = ["YOUR-EMAIL"]
+branch = "main"
+region = "us-west-2"

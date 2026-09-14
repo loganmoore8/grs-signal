@@ -1,0 +1,11 @@
+node_modules
+.next
+.next-dev
+out
+dist
+.local
+infra/.terraform
+package-lock.json
+GRS-SIGNAL-MVP-SPEC.md
+BUILD-PLAN.md
+apps/web/next-env.d.ts
