@@ -2,9 +2,9 @@
   "model": "us.anthropic.claude-sonnet-4-6",
   "timezone": "America/Los_Angeles",
   "schemaVersion": "1",
-  "dailyUsd": 1.25,
-  "monthlyUsd": 37.5,
-  "dailyCalls": 30,
+  "dailyUsd": 3,
+  "monthlyUsd": 90,
+  "dailyCalls": 72,
   "maxCandidates": 30,
   "maxQualified": 15,
   "maxOutputTokens": 8000,
@@ -20,5 +20,7 @@
     "Contact-center conversational AI, virtual agents, knowledge, self-service and analytics"
   ],
   "provider": "bedrock",
-  "reservationInputTokens": 40000
+  "reservationInputTokens": 100000,
+  "discoveryCalls": 20,
+  "maxDocuments": 30
 }

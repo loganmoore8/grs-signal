@@ -99,7 +99,7 @@ export async function startRun(store: Store, mode: 'local' | 'live', now = new D
     runId: id,
     status: 'queued',
     theme,
-    maxCalls: i === 3 ? 8 : 6,
+    maxCalls: i === 3 ? 8 : config.discoveryCalls,
   }));
   const run: Run = {
     id,
@@ -138,7 +138,7 @@ export async function tick(
       const claimed = {
         ...job,
         version: job.version + 1,
-        leaseUntil: new Date(now.getTime() + 330000).toISOString(),
+        leaseUntil: new Date(now.getTime() + 930000).toISOString(),
       };
       try {
         await store.put('runs', job.id, claimed, job.version);

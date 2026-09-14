@@ -287,3 +287,44 @@ it('removes fetched expired PDFs before final discovery qualification', async ()
   expect(payload.sources.some((d: SourceDocument) => d.url === oldUrl)).toBe(false);
   expect(payload.sources.some((d: SourceDocument) => d.url === c.officialUrl)).toBe(true);
 });
+
+it('uses twenty distinct searches and caps source downloads at thirty', async () => {
+  mocks.send
+    .mockResolvedValueOnce(
+      response(
+        JSON.stringify({
+          queries: ['deadline amendment followup', 'new public-sector solicitation'],
+          urls: [],
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(response(JSON.stringify({ candidates: [] })));
+  let queryIndex = 0;
+  const search = {
+    search: vi.fn(async () =>
+      Array.from({ length: 5 }, (_, i) => ({
+        url: `https://city.gov/rfp-${queryIndex++}-${i}`,
+        title: 'Contact center RFP',
+        text,
+      })),
+    ),
+  };
+  const fetchPage = vi.fn(async (url: string) => ({
+    url,
+    text,
+    links: Array.from({ length: 8 }, (_, i) => `${url}/addendum-${i}.pdf`),
+  }));
+  const provider = new BedrockResearch(store, search, fetchPage);
+  const id = await provider.start({
+    jobId: 'expanded',
+    theme: 'Connect',
+    windowDays: 30,
+    now,
+    maxCalls: 20,
+    known: [],
+  });
+  expect(search.search).toHaveBeenCalledTimes(20);
+  expect(new Set(search.search.mock.calls.map((args: unknown[]) => args[0])).size).toBe(20);
+  expect(fetchPage.mock.calls.length).toBe(30);
+  expect((await provider.poll(id)).calls).toBe(20);
+});

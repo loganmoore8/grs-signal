@@ -20,8 +20,8 @@ afterEach(async () => {
 });
 it('atomically reserves budgets and settles only once', async () => {
   const results = await Promise.all([
-    reserve(store, 'a', 0.8, 20, now),
-    reserve(store, 'b', 0.8, 20, now),
+    reserve(store, 'a', 1.8, 20, now),
+    reserve(store, 'b', 1.8, 20, now),
   ]);
   expect(results.filter(Boolean)).toHaveLength(1);
   const winner = results[0] ? 'a' : 'b';
@@ -88,7 +88,7 @@ it('requires authentication and preserves decisions through research', async () 
 });
 
 it('defers a research request when the remaining budget cannot cover its token allowance', async () => {
-  expect(await reserve(store, 'earlier-research', 1.23, 1, now)).toBe(true);
+  expect(await reserve(store, 'earlier-research', 2.98, 1, now)).toBe(true);
   expect(await reserve(store, 'terra-retry', requestReservation(2), 2, now)).toBe(false);
 });
 

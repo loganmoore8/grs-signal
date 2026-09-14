@@ -79,7 +79,7 @@ export class BedrockResearch implements ResearchProvider {
     };
     const attempted = new Set<string>();
     const read = async (doc: SourceDocument) => {
-      if (attempted.has(doc.url) || attempted.size >= 10) return;
+      if (attempted.has(doc.url) || attempted.size >= config.maxDocuments) return;
       attempted.add(doc.url);
       try {
         const page = await this.fetchPage(doc.url);
@@ -186,13 +186,13 @@ export class BedrockResearch implements ResearchProvider {
           Number(plan.urls.includes(b.url)) - Number(plan.urls.includes(a.url)) ||
           sourceRank(b) + deadlineRank(b, r.now) - (sourceRank(a) + deadlineRank(a, r.now)),
       )
-      .slice(0, 8);
+      .slice(0, config.maxDocuments - 6);
     for (const doc of docs) await read(doc);
     const staleSources = docs.filter((d) => deadlineRank(d, r.now) < 0).map((d) => d.url);
     if (!/recheck/i.test(r.theme)) docs = docs.filter((d) => deadlineRank(d, r.now) >= 0);
     // Follow relevant document links even if the search index omitted an attachment.
     for (const url of docs.filter((d) => sourceRank(d) >= 5).flatMap((d) => d.links || [])) {
-      if (docs.length >= 10 || attempted.size >= 10) break;
+      if (docs.length >= config.maxDocuments || attempted.size >= config.maxDocuments) break;
       if (hits.has(url)) continue;
       const doc: SourceDocument = {
         url,
@@ -315,25 +315,52 @@ export function researchQueries(r: ResearchRequest) {
       timeZone: 'UTC',
     }).format(d);
   });
+  let base: string[];
   if (/conversational|virtual agents/i.test(r.theme))
-    return [
+    base = [
       `"AI-powered" "phone" "RFP" deadline "${months[0]}"`,
       `"virtual agent" RFP deadline "${months[1]}"`,
       `"contact center analytics" RFP ${year} site:gov`,
     ];
-  if (/omnichannel|311/i.test(r.theme))
-    return [
+  else if (/omnichannel|311/i.test(r.theme))
+    base = [
       `"311" "CRM" "RFP" deadline "${months[0]}"`,
       `"omnichannel" RFP deadline "${months[1]}"`,
       `"CRM" "contact center" RFP ${year}`,
     ];
-  return [
-    `"contact center" "RFP" deadline "${months[1]}"`,
-    `"call center" "RFP" deadline "${months[0]}"`,
-    `"contact center" RFP ${year} site:edu`,
-    `"IVR" RFP ${year} site:gov`,
-    `"contact center" RFP deadline "${months[2]}"`,
-  ];
+  else
+    base = [
+      `"contact center" "RFP" deadline "${months[1]}"`,
+      `"call center" "RFP" deadline "${months[0]}"`,
+      `"contact center" RFP ${year} site:edu`,
+      `"IVR" RFP ${year} site:gov`,
+      `"contact center" RFP deadline "${months[2]}"`,
+    ];
+  const terms = /conversational|virtual agents/i.test(r.theme)
+    ? [
+        'conversational AI',
+        'virtual agent',
+        'customer service chatbot',
+        'contact center analytics',
+        'interactive voice response',
+      ]
+    : /omnichannel|311/i.test(r.theme)
+      ? [
+          '311 CRM',
+          'citizen service platform',
+          'omnichannel',
+          'customer relationship management',
+          'contact center integration',
+        ]
+      : ['contact center', 'CCaaS', 'Amazon Connect', 'IVR', 'customer service platform'];
+  const coverage = terms.flatMap((term) => [
+    `"${term}" RFP deadline "${months[1]}"`,
+    `"${term}" solicitation ${year} public university`,
+    `"${term}" RFP ${year} public utility`,
+    `"${term}" RFP ${year} site:procurement.opengov.com`,
+    `"${term}" RFP ${year} site:bonfirehub.com`,
+  ]);
+  return [...new Set([...base, ...coverage])];
 }
 
 export function parseResearchResponse(

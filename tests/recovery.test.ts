@@ -129,5 +129,5 @@ it('reports estimates separately from unavailable AWS billing', async () => {
   const report = await costReport(store, now);
   expect(report.actualAwsUsd).toBeNull();
   expect(report.projectedCombinedUsd).toBeCloseTo(15 + 30 / 14);
-  expect(report.plannedMonthlyCeilingUsd).toBe(52.5);
+  expect(report.plannedMonthlyCeilingUsd).toBe(105);
 });
