@@ -1,6 +1,6 @@
 # Draft AWS model-access request — not sent
 
-Please enable Amazon Bedrock Mantle inference for `openai.gpt-5.6-luna` in AWS account `062408551112`, region `us-west-2`.
+Please enable Amazon Bedrock Mantle inference for `openai.gpt-5.6-terra` in AWS account `062408551112`, region `us-west-2`.
 
 Use case: GRS Signal, an internal Guided Reach Solutions procurement intelligence application. It researches public-sector contact-center modernization opportunities using official sources and Bedrock Web Search. Expected research allowance is $1.25/day and $37.50/month.
 
@@ -20,3 +20,7 @@ Checks completed:
 - Rejection persists after agreement activation and propagation time. No successful inference has run.
 
 Please check account-level eligibility and enablement for proprietary OpenAI models on Mantle. The application remains paused pending a successful bounded live check.
+
+## Terra follow-up, 2026-09-14 07:02 UTC
+
+Terra is now the selected model. Its agreement, authorization, entitlement and regional availability all report active/available. The first live request returned the same HTTP 401: `openai.gpt-5.6-terra is not available for this account`. Request ID: `req_lupalb5gtuiwnd2c7zydlj6x6zobsu4wsrqvox45ts7dr5fy6fua`. Please investigate Terra access; the Luna evidence above is retained as related history.
