@@ -2,7 +2,7 @@
 
 A lean internal procurement intelligence app for Guided Reach Solutions. Daily research discovers and qualifies public-sector contact-center modernization opportunities. The frontend has Recommended, Pursuing, and Filtered out views with a source-backed detail drawer.
 
-**Deployment in progress:** AWS infrastructure is provisioned in `us-west-2`. Production research uses Amazon Bedrock with IAM authentication. See [deployment status](docs/deployment-status.md) for live checks and remaining gates. The local preview contains clearly labeled fictional opportunities.
+**Deployed; research access pending:** AWS infrastructure is provisioned in `us-west-2`. Production research uses Amazon Bedrock with IAM authentication. See [deployment status](docs/deployment-status.md) for live checks and remaining gates. The local preview contains clearly labeled fictional opportunities.
 
 ## Local quick start
 
@@ -33,7 +33,7 @@ Production frontend output is `apps/web/out`; Lambda packages are `dist/api.zip`
 
 ## Deployment boundary
 
-Finish local acceptance before running `terraform apply`. Terraform is initialized only for validation during development; no real AWS plan or apply has run. Follow [the runbook](docs/runbook.md) for the final plan, apply, configuration, and live checks. The worker defaults to not ready even if schedules exist. Bedrock uses the Lambda role; no OpenAI API key is required.
+Finish local acceptance before running `terraform apply`. The initial AWS apply is complete. Review a saved Terraform plan before applying subsequent changes. Follow [the runbook](docs/runbook.md) for the final plan, apply, configuration, and live checks. The worker defaults to not ready even if schedules exist. Bedrock uses the Lambda role; no OpenAI API key is required.
 
 - [Product specification](GRS-SIGNAL-MVP-SPEC.md)
 - [Build plan](BUILD-PLAN.md)
