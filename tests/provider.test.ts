@@ -6,13 +6,13 @@ vi.mock('openai', () => ({
     responses = mocks;
   },
 }));
-import { OpenAiResearch } from '../services/research/provider';
+import { BedrockResearch } from '../services/research/provider';
 const now = new Date('2026-09-01T12:00:00Z');
 beforeEach(() => vi.clearAllMocks());
 it('constructs a bounded background request with required search and a strict schema', async () => {
   mocks.create.mockResolvedValue({ id: 'response-1' });
   expect(
-    await new OpenAiResearch('fake').start({
+    await new BedrockResearch('us-west-2').start({
       jobId: 'a',
       theme: 'Connect',
       windowDays: 7,
@@ -35,7 +35,7 @@ it('downgrades invented source URLs even if output claims source support', async
     output: [],
     output_text: JSON.stringify({ candidates: [demoCandidates(now)[0]] }),
   });
-  const result = await new OpenAiResearch('fake').poll('r');
+  const result = await new BedrockResearch('us-west-2').poll('r');
   expect(result.candidates[0]?.confidence).toBe('partial');
   expect(result.candidates[0]?.verifiedAt).toBeNull();
 });
@@ -47,7 +47,7 @@ it('preserves returned source references and usage for supported results', async
     output: [{ type: 'web_search_call', action: { sources: [{ url: c.officialUrl }] } }],
     output_text: JSON.stringify({ candidates: [c] }),
   });
-  const result = await new OpenAiResearch('fake').poll('r');
+  const result = await new BedrockResearch('us-west-2').poll('r');
   expect(result.candidates[0]?.confidence).toBe('supported');
   expect(result).toMatchObject({ inputTokens: 2000, outputTokens: 1000, calls: 1 });
 });
@@ -58,7 +58,7 @@ it('rejects malformed output without losing usage accounting', async () => {
     output: [],
     output_text: '{bad',
   });
-  expect(await new OpenAiResearch('fake').poll('r')).toMatchObject({
+  expect(await new BedrockResearch('us-west-2').poll('r')).toMatchObject({
     status: 'failed',
     inputTokens: 2000,
     candidates: [],

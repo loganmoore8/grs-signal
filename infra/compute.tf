@@ -25,7 +25,6 @@ resource "aws_iam_role_policy" "data" {
     { Effect = "Allow", Action = ["dynamodb:PutItem"], Resource = each.key == "api" ? [aws_dynamodb_table.data["opportunities"].arn] : [for t in aws_dynamodb_table.data : t.arn] }
     ], each.key == "research" ? [
     { Effect = "Allow", Action = ["s3:PutObject"], Resource = ["${aws_s3_bucket.snapshots.arn}/*"] },
-    { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = [aws_secretsmanager_secret.openai.arn] },
     { Effect = "Allow", Action = ["ses:SendEmail"], Resource = [aws_ses_email_identity.sender.arn] }
   ] : []) })
 }
@@ -51,7 +50,6 @@ resource "aws_lambda_function" "functions" {
       RUNS_TABLE          = aws_dynamodb_table.data["runs"].name
       HISTORY_TABLE       = aws_dynamodb_table.data["history"].name
       SNAPSHOTS_BUCKET    = aws_s3_bucket.snapshots.id
-      OPENAI_SECRET_ARN   = aws_secretsmanager_secret.openai.arn
       ALERT_SENDER        = var.alert_sender
       ALERT_RECIPIENTS    = join(",", var.alert_recipients)
       APP_URL             = local.app_url

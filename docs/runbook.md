@@ -39,7 +39,7 @@ Plans/state may contain sensitive infrastructure configuration. Do not commit or
 
 ## Configure the deployed application
 
-The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply `OPENAI_API_KEY` through a secure process environment and optional comma-separated `INVITE_EMAILS`; never put the key in command arguments, Terraform variables, logs, or a frontend variable.
+The setup script never runs from Terraform, ordinary builds, tests, or preview startup. Set `ALLOW_DEPLOYMENT_SETUP=true` in your process environment at deployment time. Supply comma-separated `INVITE_EMAILS` for initial users. Research authenticates to Amazon Bedrock using the worker IAM role, without an API key. Enable the `openai.gpt-5.6-luna` Bedrock model agreement in the deployment account before the live check.
 
 ```sh
 npx tsx scripts/deployment.ts configure
@@ -47,9 +47,9 @@ npx tsx scripts/deployment.ts release-web
 npx tsx scripts/deployment.ts smoke
 ```
 
-`configure` writes the secret and sends invitations to the explicitly configured emails. `release-web` runs and checks the Amplify build. `smoke` verifies unauthenticated access rejection and a no-spend readiness guard. It does not prove the authenticated app or OpenAI integration.
+`configure` sends invitations to the explicitly configured emails. `release-web` runs and checks the Amplify build. `smoke` verifies unauthenticated access rejection and a no-spend readiness guard. It does not prove the authenticated app or Bedrock integration.
 
-Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded OpenAI test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves $0.15 and two calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if search was absent, the limit was exceeded, or no source-supported candidate was returned. Do not run it repeatedly or in CI. Validate actual compatibility, tool-limit enforcement, evidence and usage before declaring live research ready.
+Complete sign-in, real storage read/write, correct sources, and SES checks. For a separate bounded Bedrock test, set `ALLOW_LIVE_RESEARCH=true` and run `npx tsx scripts/live-research-check.ts`. This paid test reserves $0.15 and two calls against the deployed ledger, settles returned usage and saves a snapshot. It fails if search was absent, the limit was exceeded, or no source-supported candidate was returned. Do not run it repeatedly or in CI. Validate actual compatibility, tool-limit enforcement, evidence and usage before declaring live research ready.
 
 After live checks pass, set `LIVE_CHECKS_PASSED=true` and run:
 
@@ -58,6 +58,8 @@ npx tsx scripts/deployment.ts enable
 ```
 
 The next daily schedule starts research. Runtime readiness is persisted application data, not Terraform-managed infrastructure. The normal workflow needs no manual input or daily command.
+
+Run `ALLOW_DEPLOYMENT_SETUP=true npx tsx scripts/cloud-storage-check.ts` to verify real conditional writes, GSI queries and S3 storage.
 
 ## Pause and recover
 
@@ -71,11 +73,11 @@ Send markers distinguish sent and uncertain email outcomes. Do not delete a mark
 
 ## Costs and retention
 
-The authenticated `/health` response includes a combined forecast using the API ledger plus the $15 AWS allowance; actual AWS billing is explicitly unavailable there. A $55 forecast warning is sent once per calendar month. Compare with AWS billing during the pilot; this estimate is not a combined invoice or hard spending cutoff.
+The authenticated `/health` response includes a combined forecast using the API ledger plus the $15 AWS allowance; actual AWS billing is explicitly unavailable there. A $55 forecast warning is sent once per calendar month. Compare with AWS billing during the pilot, avoiding double-counting the Bedrock ledger against billed Bedrock usage; this estimate is not a combined invoice or hard spending cutoff.
 
-OpenAI accounting uses actual reported tokens/tool calls and versioned rates. Daily reservations share $1.25 and 30 calls across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
+Bedrock accounting uses actual reported tokens/tool calls and versioned rates. Daily reservations share $1.25 and 30 calls across jobs; monthly research allowance is $37.50 per calendar month. Search input can be larger than expected, so reservation limits are conservative workload controls, not a precise provider billing cutoff.
 
-AWS's $15/month allowance is a planning target. Activate the `Project` cost allocation tag in the billing account for project filtering. Review attributable AWS charges alongside the API ledger; AWS Budgets does not include OpenAI spending. Verify the combined 30-day projection during the pilot. Raw evidence snapshots expire after 90 days and CloudWatch logs after 14 days. Compact facts/history remain with records.
+AWS's $15/month allowance is a planning target. Activate the `Project` cost allocation tag in the billing account for project filtering. Review attributable AWS charges alongside the API ledger; Bedrock charges are on the AWS bill. The existing $15 Project-tag budget covers infrastructure; reconcile Bedrock project usage separately because model charges may not inherit the Lambda Project tag. Verify the combined 30-day projection during the pilot. Raw evidence snapshots expire after 90 days and CloudWatch logs after 14 days. Compact facts/history remain with records.
 
 ## Rollback
 

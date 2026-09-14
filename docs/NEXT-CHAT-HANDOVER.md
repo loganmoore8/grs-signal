@@ -2,6 +2,8 @@
 
 Prepared 2026-09-13 (America/Los_Angeles).
 
+**Superseded deployment status:** Deployment has since begun on `main`, and research has migrated to Amazon Bedrock with IAM authentication. Read [deployment-status.md](deployment-status.md) first; the local-only statements below describe the original handoff.
+
 ## Start here
 
 Continue the existing application; do not scaffold a replacement. Repository: [loganmoore8/grs-signal](https://github.com/loganmoore8/grs-signal). Initial delivery branch: `codex/initial-build`. Read this document, `README.md`, `docs/implementation-status.md`, and `docs/runbook.md` before deployment work. Check `git status` for newer user changes.

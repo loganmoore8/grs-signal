@@ -1,4 +1,5 @@
-import { OpenAiResearch } from '../services/research/provider';
+import OpenAI from 'openai';
+import { BedrockResearch } from '../services/research/provider';
 import { usageCost, reserve, settle } from '../services/research/budget';
 import { AwsStore } from '../packages/storage/aws';
 import { execFileSync } from 'node:child_process';
@@ -7,16 +8,14 @@ if (process.env.ALLOW_LIVE_RESEARCH !== 'true')
   throw new Error(
     'Live research is disabled. Enable only during the final deployment validation stage.',
   );
-const key = process.env.OPENAI_API_KEY;
-if (!key) throw new Error('OPENAI_API_KEY is required.');
-const provider = new OpenAiResearch(key),
-  now = new Date();
+const now = new Date();
 const deployment = JSON.parse(
   execFileSync('terraform', ['-chdir=infra', 'output', '-json', 'deployment'], {
     encoding: 'utf8',
   }),
 );
 process.env.AWS_REGION = deployment.region;
+const provider = new BedrockResearch(deployment.region);
 process.env.OPPORTUNITIES_TABLE = deployment.opportunities_table;
 process.env.RUNS_TABLE = deployment.runs_table;
 process.env.HISTORY_TABLE = deployment.history_table;
@@ -25,15 +24,29 @@ const store = new AwsStore(),
   reservation = `deployment-smoke:${randomUUID()}`;
 if (!(await reserve(store, reservation, 0.15, 2, now)))
   throw new Error('Research budget is exhausted; live check was not submitted.');
-const id = await provider.start({
-  jobId: 'deployment-smoke',
-  theme:
-    'Find one recent U.S. public-sector contact-center modernization procurement with official evidence.',
-  windowDays: 30,
-  now: now.toISOString(),
-  maxCalls: 2,
-  known: [],
-});
+console.log(`Budget reservation: ${reservation}`);
+const id = await provider
+  .start({
+    jobId: 'deployment-smoke',
+    theme:
+      'Find one recent U.S. public-sector contact-center modernization procurement with official evidence.',
+    windowDays: 30,
+    now: now.toISOString(),
+    maxCalls: 2,
+    known: [],
+  })
+  .catch(async (error: unknown) => {
+    if (error instanceof OpenAI.APIError && [400, 401, 403, 404, 422].includes(error.status || 0)) {
+      await settle(store, reservation, 0, 0);
+    }
+    throw error;
+  });
+await store.put(
+  'runs',
+  `smoke:${reservation}`,
+  { responseId: id, reservation, createdAt: now.toISOString() },
+  0,
+);
 console.log(`Started bounded live response ${id}. This command incurs API charges.`);
 let finished = false;
 for (let i = 0; i < 60; i++) {

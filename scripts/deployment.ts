@@ -1,6 +1,5 @@
 /** Final-deployment tooling. Never called by dev, tests, build, or Terraform. */
 import { execFileSync } from 'node:child_process';
-import { SecretsManagerClient, PutSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import {
   CognitoIdentityProviderClient,
   AdminCreateUserCommand,
@@ -24,7 +23,6 @@ const d = JSON.parse(
   }),
 ) as {
   region: string;
-  openai_secret_arn: string;
   user_pool_id: string;
   amplify_app_id: string;
   branch: string;
@@ -36,14 +34,6 @@ const d = JSON.parse(
 const options = { region: d.region },
   db = DynamoDBDocumentClient.from(new DynamoDBClient(options));
 if (action === 'configure') {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key)
-    throw new Error(
-      'OPENAI_API_KEY is required in the process environment; do not put it in Terraform variables.',
-    );
-  await new SecretsManagerClient(options).send(
-    new PutSecretValueCommand({ SecretId: d.openai_secret_arn, SecretString: key }),
-  );
   for (const email of (process.env.INVITE_EMAILS || '')
     .split(',')
     .map((s) => s.trim())
@@ -64,7 +54,9 @@ if (action === 'configure') {
       if ((e as Error).name !== 'UsernameExistsException') throw e;
     }
   }
-  console.log('Credential configured and requested invitations processed. Research remains gated.');
+  console.log(
+    'Requested invitations processed. Bedrock uses the worker IAM role. Research remains gated.',
+  );
 }
 if (action === 'enable' || action === 'pause') {
   if (action === 'enable' && process.env.LIVE_CHECKS_PASSED !== 'true')

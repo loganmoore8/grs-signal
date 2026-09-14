@@ -59,7 +59,8 @@ export class AwsStore implements Store {
           new QueryCommand({
             TableName: this.names[table],
             IndexName: 'by-group',
-            KeyConditionExpression: 'bucket = :bucket',
+            KeyConditionExpression: '#bucket = :bucket',
+            ExpressionAttributeNames: { '#bucket': 'bucket' },
             ExpressionAttributeValues: { ':bucket': bucket },
             ExclusiveStartKey: start,
             Limit: 200,

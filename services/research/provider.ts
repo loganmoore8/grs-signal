@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import { bedrock } from 'openai/providers/bedrock/aws';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { researchOutputSchema, type Candidate } from '../../packages/domain/index';
 import config from '../../config/research.json';
@@ -25,10 +27,19 @@ export interface ResearchProvider {
   poll(id: string): Promise<ResearchResult>;
   cancel(id: string): Promise<void>;
 }
-export class OpenAiResearch implements ResearchProvider {
+export class BedrockResearch implements ResearchProvider {
   private client: OpenAI;
-  constructor(key: string) {
-    this.client = new OpenAI({ apiKey: key, maxRetries: 0, timeout: 15000 });
+  constructor(region = process.env.AWS_REGION || 'us-west-2') {
+    this.client = new OpenAI({
+      provider: bedrock({
+        region,
+        endpoint: 'mantle',
+        baseURL: `https://bedrock-mantle.${region}.api.aws/openai/v1`,
+        credentialProvider: defaultProvider(),
+      }),
+      maxRetries: 0,
+      timeout: 15000,
+    });
   }
   async start(r: ResearchRequest) {
     // The SDK omits max_tool_calls on create although its response request contract documents it.
@@ -40,7 +51,7 @@ export class OpenAiResearch implements ResearchProvider {
       store: true,
       max_output_tokens: config.maxOutputTokens,
       ...limits,
-      tools: [{ type: 'web_search' }],
+      tools: [{ type: 'web_search', external_web_access: true, search_context_size: 'low' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
       text: { format: zodTextFormat(researchOutputSchema, 'procurement_candidates') },

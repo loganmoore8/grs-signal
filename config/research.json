@@ -1,5 +1,5 @@
 {
-  "model": "gpt-5.6-luna",
+  "model": "openai.gpt-5.6-luna",
   "timezone": "America/Los_Angeles",
   "schemaVersion": "1",
   "dailyUsd": 1.25,
@@ -9,14 +9,15 @@
   "maxQualified": 15,
   "maxOutputTokens": 12000,
   "prices": {
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 1.2,
-    "searchCall": 0.01,
-    "version": "2026-09-13"
+    "inputPerMillion": 0.22,
+    "outputPerMillion": 1.32,
+    "searchCall": 0.012,
+    "version": "2026-09-14-bedrock"
   },
   "themes": [
     "Amazon Connect, AWS professional services, CCaaS migration and IVR redesign",
     "Omnichannel, 311 citizen services and CRM/contact-center integration",
     "Contact-center conversational AI, virtual agents, knowledge, self-service and analytics"
-  ]
+  ],
+  "provider": "bedrock"
 }

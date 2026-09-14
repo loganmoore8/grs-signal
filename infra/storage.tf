@@ -54,8 +54,3 @@ resource "aws_s3_bucket_lifecycle_configuration" "snapshots" {
     abort_incomplete_multipart_upload { days_after_initiation = 1 }
   }
 }
-resource "aws_secretsmanager_secret" "openai" {
-  name                    = "${var.name}/openai"
-  description             = "Populated by the deployment setup script; never place the value in Terraform state."
-  recovery_window_in_days = 7
-}
