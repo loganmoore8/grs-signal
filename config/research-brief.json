@@ -1,0 +1,10 @@
+{
+  "version": "2-small-mid-market",
+  "prompt": "Search for newly published US state and local government procurement opportunities relevant to Guided Reach Solutions, prioritizing SMALL-TO-MID-MARKET buyers: cities, towns, counties, utilities, community choice aggregators/JPAs, transit agencies, housing authorities, special districts, and smaller state agencies or divisions. Prefer agencies where a small specialist AWS partner could realistically prime or strongly influence the deal; roughly favor populations of 25,000-750,000 or project sizes around $50,000-$2,000,000 when those figures are available. Deprioritize federal opportunities, giant statewide transformations, very large metros, higher education, Sourcewell/cooperative master contracts, and opportunities clearly designed for global systems integrators. Focus on RFPs, RFIs, RFQs, ITNs, sources sought, market research, and active procurement notices involving Amazon Connect, AWS, contact centers, CCaaS, IVR, 311, citizen or constituent services, conversational AI, virtual agents, chatbots, generative AI, CRM, knowledge management, cloud migration, cloud modernization, and adjacent citizen-service technology. Prefer opportunities posted within the last 14 days and with at least 14 days remaining before the response deadline. Verify each opportunity is active, prefer official government/procurement sources, deduplicate results, and only notify me when genuinely relevant new opportunities are found. For each result include agency, state, agency type/approximate size if discoverable, title, solicitation number if available, type, publication date, due date, estimated value if available, source, why it fits GRS, whether GRS could plausibly prime it, and a 0-100 GRS fit score.",
+  "preferredPublicationDays": 14,
+  "preferredResponseDays": 14,
+  "populationMin": 25000,
+  "populationMax": 750000,
+  "valueMinUsd": 50000,
+  "valueMaxUsd": 2000000
+}

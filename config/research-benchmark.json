@@ -1,0 +1,29 @@
+{
+  "providedAt": "2026-09-16",
+  "cases": [
+    {
+      "agency": "City of Grand Rapids",
+      "title": "AI Powered Chatbot Platform",
+      "solicitationNumber": "920-45-269",
+      "sourceUrl": "https://www.highergov.com/sl/contract-opportunity/mi-ai-powered-chatbot-platform-73223898/",
+      "expectedRole": "prime",
+      "notes": "Discovery-only source. Official budget unknown; third-party AI price estimate must not be promoted to a confirmed value."
+    },
+    {
+      "agency": "Denver Water",
+      "title": "Customer Experience AI Chatbot",
+      "solicitationNumber": "10575",
+      "sourceUrl": "https://www.denverwater.org/contractors/bid-and-contract-opportunities/current-opportunities",
+      "expectedRole": "prime_or_partner",
+      "notes": "Official table deadline. Genesys constraints must remain unresolved until documents are checked. Utility population is a preference, not an exclusion."
+    },
+    {
+      "agency": "City of Jackson",
+      "title": "Enterprise Resource Planning (ERP) System",
+      "solicitationNumber": "20477-092226",
+      "sourceUrl": "https://www.jacksonmsbids.com/projects/20867/details/20477-092226-enterprise-resource-planning-erp-system",
+      "expectedRole": "partner_or_subcontractor",
+      "notes": "Official citizen-service/311 workstream inside broader ERP. Do not recommend whole-contract prime without evidence of delivery capability."
+    }
+  ]
+}

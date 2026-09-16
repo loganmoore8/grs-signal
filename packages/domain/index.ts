@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import scoring from '../../config/scoring.json';
+import brief from '../../config/research-brief.json';
 
 export const statuses = ['new', 'reviewing', 'pursue', 'pass', 'submitted', 'won', 'lost'] as const;
 export type View = 'recommended' | 'pursuing' | 'filtered';
@@ -31,6 +32,8 @@ export const factsSchema = z
         'integration',
         '311',
         'analytics',
+        'crm',
+        'cloud',
       ]),
     ),
     alignment: z.enum(['unknown', 'incompatible', 'neutral', 'aws', 'connect']),
@@ -41,6 +44,18 @@ export const factsSchema = z
     inScopeBuyer: z.boolean(),
   })
   .strict();
+export const buyerProfileSchema = z
+  .object({
+    agencyType: nullableText,
+    population: z.number().int().nonnegative().nullable(),
+    estimatedValueUsd: z.number().nonnegative().nullable(),
+    scale: z.enum(['small_mid', 'large', 'unknown']),
+    procurementScale: z.enum(['right_sized', 'large_transformation', 'cooperative', 'unknown']),
+    primePlausibility: z.enum(['strong', 'plausible', 'unlikely', 'unknown']),
+    rationale: z.string().max(1500),
+    sourceUrls: z.array(safeUrl).max(10),
+  })
+  .strict();
 export const candidateSchema = z
   .object({
     agency: z.string().min(1).max(250),
@@ -48,7 +63,19 @@ export const candidateSchema = z
     buyerType: z.enum(['state', 'local', 'authority', 'utility', 'higher_education', 'other']),
     title: z.string().min(1).max(500),
     solicitationNumber: nullableText,
-    procurementType: z.enum(['RFP', 'RFQ', 'RFI', 'ITB', 'IFB', 'other']),
+    procurementType: z.enum([
+      'RFP',
+      'RFQ',
+      'RFI',
+      'ITN',
+      'sources_sought',
+      'market_research',
+      'notice',
+      'ITB',
+      'IFB',
+      'other',
+    ]),
+    buyerProfile: buyerProfileSchema.optional(),
     publicationDate: z.string().date().nullable(),
     dueDate: z.string().date().nullable(),
     dueAt: z.string().datetime({ offset: true }).nullable(),
@@ -118,12 +145,57 @@ export class Conflict extends Error {
 
 export function assess(c: Candidate, now = new Date()) {
   const f = c.facts;
+  const p = c.buyerProfile;
+  const populationFit =
+    p?.population != null &&
+    p.population >= brief.populationMin &&
+    p.population <= brief.populationMax;
+  const buyerFit =
+    c.buyerType === 'higher_education'
+      ? 2
+      : p?.scale === 'large'
+        ? 2
+        : populationFit || p?.scale === 'small_mid'
+          ? 15
+          : 8;
+  const value = p?.estimatedValueUsd;
+  const valueFit =
+    p?.procurementScale === 'large_transformation' || p?.procurementScale === 'cooperative'
+      ? 0
+      : value == null
+        ? 5
+        : value >= brief.valueMinUsd && value <= brief.valueMaxUsd
+          ? 10
+          : 2;
+  const publicationAge = c.publicationDate
+    ? (Date.parse(localDay(now)) - Date.parse(c.publicationDate)) / 86400000
+    : null;
+  const responseDays = c.dueDate
+    ? (Date.parse(c.dueDate) - Date.parse(localDay(now))) / 86400000
+    : null;
+  const prime =
+    p?.primePlausibility ||
+    (c.role === 'prime'
+      ? f.roleClarity === 'clear'
+        ? 'strong'
+        : 'plausible'
+      : c.role === 'unknown'
+        ? 'unknown'
+        : 'plausible');
   const breakdown = {
-    centrality: { none: 0, incidental: 10, workstream: 20, primary: 30 }[f.centrality],
-    services: [0, 10, 20, 25][Math.min(new Set(f.services).size, 3)]!,
-    alignment: { unknown: 0, incompatible: 0, neutral: 10, aws: 15, connect: 20 }[f.alignment],
-    substance: { none: 0, limited: 5, substantial: 15 }[f.substance],
-    role: { unknown: 0, plausible: 5, clear: 10 }[f.roleClarity],
+    centrality: { none: 0, incidental: 5, workstream: 15, primary: 20 }[f.centrality],
+    services: [0, 6, 8, 10][Math.min(new Set(f.services).size, 3)]!,
+    alignment: { unknown: 2, incompatible: 0, neutral: 5, aws: 8, connect: 10 }[f.alignment],
+    primePotential: { unknown: 5, unlikely: 0, plausible: 18, strong: 25 }[prime],
+    buyerFit,
+    projectSize: valueFit,
+    publicationRecency:
+      publicationAge == null
+        ? 2
+        : publicationAge >= 0 && publicationAge <= brief.preferredPublicationDays
+          ? 5
+          : 0,
+    responseWindow: responseDays == null ? 2 : responseDays >= brief.preferredResponseDays ? 5 : 0,
   };
   const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
   const inactive =
@@ -238,6 +310,7 @@ export function fingerprint(c: Candidate) {
     c.procurementState,
     c.legacyPlatform,
     c.targetPlatform,
+    c.buyerProfile,
     { ...c.facts, services: [...new Set(c.facts.services)].sort() },
     [...c.blockers].sort(),
   ]);
@@ -281,7 +354,7 @@ export function mergeOpportunity(
   now = new Date(),
 ): Opportunity {
   // Null extraction values do not erase previously supported facts.
-  const next = { ...c };
+  const next = { ...c, buyerProfile: c.buyerProfile || old.buyerProfile };
   for (const k of [
     'solicitationNumber',
     'publicationDate',

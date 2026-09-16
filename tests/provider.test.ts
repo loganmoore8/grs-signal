@@ -212,7 +212,7 @@ it('covers evergreen non-government domains and retains material mixed technolog
   });
   expect(search.search.mock.calls.every((args: unknown[]) => args[1] === undefined)).toBe(true);
   expect(
-    search.search.mock.calls.some((args: unknown[]) => String(args[0]).includes('site:edu')),
+    search.search.mock.calls.some((args: unknown[]) => String(args[0]).includes('utility')),
   ).toBe(true);
   expect(
     search.search.mock.calls.some((args: unknown[]) => String(args[0]).includes('"IVR"')),
@@ -327,4 +327,50 @@ it('uses twenty distinct searches and caps source downloads at thirty', async ()
   expect(new Set(search.search.mock.calls.map((args: unknown[]) => args[0])).size).toBe(20);
   expect(fetchPage.mock.calls.length).toBe(30);
   expect((await provider.poll(id)).calls).toBe(20);
+});
+
+it('keeps the full schema in the prompt and validates profile values locally', async () => {
+  mocks.send
+    .mockResolvedValueOnce(response(JSON.stringify({ queries: [], urls: [] })))
+    .mockResolvedValueOnce(response(JSON.stringify({ candidates: [] })));
+  const provider = new BedrockResearch(store, { search: async () => [] });
+  await provider.start({
+    jobId: 'schema',
+    theme: 'AI',
+    windowDays: 14,
+    now,
+    maxCalls: 0,
+    known: [],
+  });
+  expect(mocks.send.mock.calls[1][0].input.outputConfig).toBeUndefined();
+  expect(
+    JSON.parse(mocks.send.mock.calls[1][0].input.messages[0].content[0].text).outputSchema,
+  ).toBeDefined();
+  const invalid = { ...c, buyerProfile: { ...c.buyerProfile!, population: -1 } };
+  expect(
+    parseResearchResponse(response(JSON.stringify({ candidates: [invalid] })), docs, 0, now).status,
+  ).toBe('failed');
+});
+
+it('accounts for planning and searches when final inference rejects the schema', async () => {
+  mocks.send
+    .mockResolvedValueOnce(response(JSON.stringify({ queries: [], urls: [] })))
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Unsupported schema'), { name: 'ValidationException' }),
+    );
+  const provider = new BedrockResearch(store, { search: async () => [] });
+  const id = await provider.start({
+    jobId: 'reject',
+    theme: 'AI',
+    windowDays: 14,
+    now,
+    maxCalls: 1,
+    known: [],
+  });
+  expect(await provider.poll(id)).toMatchObject({
+    status: 'failed',
+    inputTokens: 2000,
+    outputTokens: 1000,
+    calls: 1,
+  });
 });

@@ -808,6 +808,32 @@ function Detail({
         <section>
           <h3>Procurement facts</h3>
           <dl>
+            <dt>Agency type</dt>
+            <dd>{o.buyerProfile?.agencyType || o.buyerType.replaceAll('_', ' ')}</dd>
+            <dt>Population served</dt>
+            <dd>
+              {o.buyerProfile?.population != null
+                ? o.buyerProfile.population.toLocaleString()
+                : 'Not confirmed'}
+            </dd>
+            <dt>Official estimated value</dt>
+            <dd>
+              {o.buyerProfile?.estimatedValueUsd != null
+                ? new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    maximumFractionDigits: 0,
+                  }).format(o.buyerProfile.estimatedValueUsd)
+                : 'Not stated'}
+            </dd>
+            <dt>GRS prime potential</dt>
+            <dd>{o.buyerProfile?.primePlausibility || 'Not assessed'}</dd>
+            {o.buyerProfile?.rationale && (
+              <>
+                <dt>Buyer and deal fit</dt>
+                <dd>{o.buyerProfile.rationale}</dd>
+              </>
+            )}
             <dt>Solicitation</dt>
             <dd>{o.solicitationNumber || 'Unknown'}</dd>
             <dt>Type</dt>

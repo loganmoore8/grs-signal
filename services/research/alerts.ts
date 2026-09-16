@@ -30,7 +30,7 @@ export async function notify(store: Store, mailer: Mailer, baseUrl: string, now 
     success = runs.find((r) => r.status === 'completed');
   if (!latest) return;
   const costs = await costReport(store, now);
-  if (costs.projectedCombinedUsd >= 55)
+  if (costs.projectedCombinedUsd >= costs.plannedMonthlyCeilingUsd)
     await sendOnce(
       store,
       mailer,
@@ -75,7 +75,11 @@ export async function notify(store: Store, mailer: Mailer, baseUrl: string, now 
   const relevant = all
     .filter((o) => shortlistEligible(o, now) || ['pursue', 'submitted'].includes(o.status))
     .sort(rank);
-  const changed = relevant.filter((o) => previous?.fingerprints[o.id] !== o.fingerprint);
+  const changed = relevant.filter(
+    (o) =>
+      !previous?.fingerprints[o.id] ||
+      (['pursue', 'submitted'].includes(o.status) && previous.fingerprints[o.id] !== o.fingerprint),
+  );
   const deadlineKey = (o: Opportunity) => {
     if (o.procurementState !== 'open') return null;
     const dates = [o.dueDate, ...o.actionDates.map((d) => d.date)].filter((d): d is string =>
@@ -86,7 +90,7 @@ export async function notify(store: Store, mailer: Mailer, baseUrl: string, now 
       .filter((d) => [0, 1, 3, 7].includes(d));
     return days.length ? `${o.id}:${Math.min(...days)}:${dates.join(',')}` : null;
   };
-  for (const o of relevant) {
+  for (const o of relevant.filter((o) => ['pursue', 'submitted'].includes(o.status))) {
     const key = deadlineKey(o);
     if (
       key &&
@@ -102,7 +106,7 @@ export async function notify(store: Store, mailer: Mailer, baseUrl: string, now 
     text = top
       .map(
         (o) =>
-          `${o.score}/100 · ${o.title}\n${o.agency}, ${o.state}\n${o.whyFits}\nProcurement: ${o.procurementState} · Evidence: ${o.confidence}\nNext: ${o.userNextAction || o.nextAction}\nDue: ${o.dueDate || 'Unconfirmed'}\n${baseUrl}/?opportunity=${o.id}`,
+          `${o.score}/100 · ${o.title}\n${o.agency}, ${o.state} · ${o.buyerProfile?.agencyType || o.buyerType}\nPrime potential: ${o.buyerProfile?.primePlausibility || 'unknown'} · Role: ${o.role}\nPublished: ${o.publicationDate || 'Unknown'} · ${o.procurementType} ${o.solicitationNumber || ''}\nOfficial estimated value: ${o.buyerProfile?.estimatedValueUsd != null ? '$' + o.buyerProfile.estimatedValueUsd.toLocaleString() : 'Not stated'}\nSource: ${o.officialUrl || 'Unconfirmed'}\n${o.whyFits}\nProcurement: ${o.procurementState} · Evidence: ${o.confidence}\nNext: ${o.userNextAction || o.nextAction}\nDue: ${o.dueDate || 'Unconfirmed'}\n${baseUrl}/?opportunity=${o.id}`,
       )
       .join('\n\n');
   const digestKey = createHash('sha256')

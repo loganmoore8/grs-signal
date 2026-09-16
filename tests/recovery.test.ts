@@ -9,6 +9,7 @@ import { notify } from '../services/research/alerts';
 import { costReport } from '../services/research/cost';
 import { FakeProvider } from './local/fake-provider';
 import { demoCandidates } from './fixtures/opportunities';
+import type { Opportunity } from '../packages/domain/index';
 import type { ResearchResult } from '../services/research/provider';
 let dir: string, store: LocalStore;
 const now = new Date('2026-09-14T12:00:00Z');
@@ -91,7 +92,7 @@ it('retains overflow and preserves daily counters across repeated ticks', async 
   );
   expect(pending).toHaveLength(25);
 }, 15000);
-it('captures one meaningful digest, stays quiet on repeats, and alerts on amendments', async () => {
+it('captures one meaningful discovery digest and stays quiet on repeats and unpursued amendments', async () => {
   await startRun(store, 'local', now);
   await tick(store, new FakeProvider(), now);
   await tick(store, new FakeProvider(), now);
@@ -106,6 +107,23 @@ it('captures one meaningful digest, stays quiet on repeats, and alerts on amendm
   expect(sent).toHaveLength(1);
   expect(sent[0]).toContain('?opportunity=');
   await ingest(store, { ...demoCandidates(now)[0]!, dueDate: '2026-11-15' }, 'amendment', now);
+  await notify(store, mailer, 'https://app.example.com', now);
+  expect(sent).toHaveLength(1);
+  const tracked = (await store.list<Opportunity>('opportunities')).find(
+    (o) => o.solicitationNumber === demoCandidates(now)[0]!.solicitationNumber,
+  )!;
+  await store.put(
+    'opportunities',
+    tracked.id,
+    { ...tracked, status: 'pursue', version: tracked.version + 1 },
+    tracked.version,
+  );
+  await ingest(
+    store,
+    { ...demoCandidates(now)[0]!, dueDate: '2026-11-20' },
+    'pursuit-amendment',
+    now,
+  );
   await notify(store, mailer, 'https://app.example.com', now);
   expect(sent).toHaveLength(2);
 });

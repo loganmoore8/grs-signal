@@ -16,6 +16,8 @@ import type { Store, Identity } from '../../packages/storage/store';
 import type { ResearchProvider } from './provider';
 import { reserve, settle, usageCost, requestReservation } from './budget';
 import config from '../../config/research.json';
+import brief from '../../config/research-brief.json';
+import scoring from '../../config/scoring.json';
 export type Job = {
   id: string;
   version: number;
@@ -211,7 +213,7 @@ export async function tick(
           const responseId = await provider.start({
             jobId: job.id,
             theme: job.theme,
-            windowDays: !existing.length || now.getDay() === 0 ? 30 : 7,
+            windowDays: brief.preferredPublicationDays,
             now: now.toISOString(),
             maxCalls: job.maxCalls,
             known,
@@ -389,12 +391,18 @@ export async function tick(
 export async function refreshEligibility(store: Store, now = new Date()) {
   for (const old of await store.list<Opportunity>('opportunities')) {
     const current = assess(old, now);
-    if (old.disposition === current.disposition && old.readiness === current.readiness) continue;
+    if (
+      old.disposition === current.disposition &&
+      old.readiness === current.readiness &&
+      old.score === current.score &&
+      old.ruleVersion === scoring.version
+    )
+      continue;
     try {
       await store.put(
         'opportunities',
         old.id,
-        { ...old, ...current, version: old.version + 1 },
+        { ...old, ...current, ruleVersion: scoring.version, version: old.version + 1 },
         old.version,
       );
     } catch (e) {

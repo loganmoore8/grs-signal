@@ -6,7 +6,7 @@ import type { SourceDocument } from './documents';
 function deadlineDates(text: string) {
   const deadlines: number[] = [];
   const pattern =
-    /(?:responses? (?:deadline|due(?: date)?)|submission deadline|bid closing|proposal(?:s)? (?:due(?: date)?|deadline)|closing date|due on|proposals? must be (?:received|submitted))[\s\S]{0,70}?(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/gi;
+    /(?:responses? (?:deadline|due(?: date)?)|submission deadline|bid closing|proposal(?:s)? (?:due(?: date)?|deadline)|closing date|due on|proposals? must be (?:received|submitted))[\s\S]{0,70}?(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/gi;
   for (const m of text.matchAll(pattern)) {
     const value = Date.parse(m[1]!.replace(/(\d)(st|nd|rd|th)/g, '$1'));
     if (Number.isFinite(value)) deadlines.push(value);
@@ -27,14 +27,29 @@ export function currentDiscoveryCandidate(c: Candidate, now: string) {
     !['closed', 'canceled', 'awarded'].includes(c.procurementState) &&
     c.facts.inScopeBuyer &&
     (!c.facts.excludedReason || c.facts.materialTechnologyPackage) &&
-    c.evidence.some(
-      (e) =>
-        e.official &&
-        (deadlineDates(e.excerpt).some(
-          (d) => new Date(d).toISOString().slice(0, 10) === (c.dueDate || c.dueAt?.slice(0, 10)),
-        ) ||
-          (c.ongoing && /ongoing|rolling|open until filled/i.test(e.excerpt))),
-    ) &&
-    Boolean(c.dueDate || c.dueAt || (c.ongoing && c.procurementState === 'open'))
+    c.evidence.some((e) => {
+      // Discovery-only sources can retain a lead for verification; they cannot
+      // establish supported confidence or trigger shortlist alerts.
+      const target = c.dueDate || c.dueAt?.slice(0, 10);
+      // Table rows often separate the deadline header from the date. The exact
+      // excerpt was already checked against source text by parseResearchResponse.
+      const dates = [
+        ...e.excerpt.matchAll(
+          /\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b/gi,
+        ),
+      ]
+        .map((m) => Date.parse(m[1]!.replace(/(\d)(st|nd|rd|th)/g, '$1')))
+        .filter(Number.isFinite);
+      const deadlineContext = /due|deadline|closing|submit|submission|bid|response/i.test(
+        e.claim + ' ' + e.excerpt + ' ' + e.locator,
+      );
+      return (
+        (deadlineContext && dates.some((d) => new Date(d).toISOString().slice(0, 10) === target)) ||
+        (c.ongoing && /ongoing|rolling|open until filled/i.test(e.excerpt)) ||
+        (!target &&
+          c.procurementState === 'open' &&
+          /accepting (?:bids|proposals)|open solicitation/i.test(e.excerpt))
+      );
+    })
   );
 }

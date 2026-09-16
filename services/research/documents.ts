@@ -149,7 +149,7 @@ export function evidencePassages(text: string, limit = 6000) {
   let result = text.slice(0, 1800);
   let end = 1800;
   const pattern =
-    /contact.center|CCaaS|Amazon Connect|IVR|deadline|due date|closing date|proposal.{0,30}due|addend|amend|extended|cancel|awarded/gi;
+    /contact.center|CCaaS|Amazon Connect|IVR|chatbot|generative AI|citizen|constituent|CRM|knowledge management|cloud modern|cloud migrat|deadline|due date|closing date|proposal.{0,30}due|addend|amend|extended|cancel|awarded/gi;
   for (const match of text.matchAll(pattern)) {
     if (result.length >= limit) break;
     const start = Math.max(end, match.index! - 220);

@@ -14,9 +14,9 @@ import {
 const now = new Date('2026-09-14T12:00:00Z');
 const fixtures = demoCandidates(now);
 describe('Qualification and decisions', () => {
-  it('ranks clear Connect implementation at 100 and neutral migration at 90', () => {
+  it('ranks clear Connect implementation at 100 and a university migration lower at 82', () => {
     expect(assess(fixtures[0]!).score).toBe(100);
-    expect(assess(fixtures[2]!).score).toBe(90);
+    expect(assess(fixtures[2]!).score).toBe(82);
   });
   it('suppresses staffing but retains mixed technology scope', () => {
     expect(assess(fixtures[4]!).disposition).toBe('suppressed');
@@ -32,7 +32,7 @@ describe('Qualification and decisions', () => {
   it('does not inflate scores for repeated service keywords', () => {
     const c = structuredClone(fixtures[0]!);
     c.facts.services = ['ivr', 'ivr', 'ivr'];
-    expect(assess(c).breakdown.services).toBe(10);
+    expect(assess(c).breakdown.services).toBe(6);
   });
   it.each(['closed', 'canceled', 'awarded', 'unknown'] as const)(
     'excludes %s procurements',

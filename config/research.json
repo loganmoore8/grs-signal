@@ -1,7 +1,7 @@
 {
   "model": "us.anthropic.claude-sonnet-4-6",
   "timezone": "America/Los_Angeles",
-  "schemaVersion": "1",
+  "schemaVersion": "2",
   "dailyUsd": 3,
   "monthlyUsd": 90,
   "dailyCalls": 72,
@@ -15,9 +15,9 @@
     "version": "2026-09-14-sonnet46-us-agentcore"
   },
   "themes": [
-    "Amazon Connect, AWS professional services, CCaaS migration and IVR redesign",
-    "Omnichannel, 311 citizen services and CRM/contact-center integration",
-    "Contact-center conversational AI, virtual agents, knowledge, self-service and analytics"
+    "Amazon Connect, AWS, CCaaS, IVR and citizen-service cloud migration for small and mid-market public buyers",
+    "311, citizen and constituent services, CRM, knowledge management and cloud modernization",
+    "Conversational AI, virtual agents, chatbots and generative AI for local government and public authorities"
   ],
   "provider": "bedrock",
   "reservationInputTokens": 100000,
