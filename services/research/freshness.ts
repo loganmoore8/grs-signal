@@ -53,3 +53,17 @@ export function currentDiscoveryCandidate(c: Candidate, now: string) {
     })
   );
 }
+
+export function sourceDateContext(doc: SourceDocument, now: string) {
+  const dates = [
+    ...doc.text.matchAll(
+      /\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b/gi,
+    ),
+  ]
+    .map((m) => Date.parse(m[1]!.replace(/(\d)(st|nd|rd|th)/g, '$1')))
+    .filter(Number.isFinite);
+  return [...new Set(dates)].slice(0, 30).map((d) => ({
+    date: new Date(d).toISOString().slice(0, 10),
+    daysFromToday: Math.round((d - Date.parse(now.slice(0, 10))) / 86400000),
+  }));
+}

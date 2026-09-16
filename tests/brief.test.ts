@@ -118,3 +118,19 @@ it('preserves a material 311 subcontracting workstream in a broader ERP procurem
   expect(assess(c, now).disposition).not.toBe('suppressed');
   expect(assess(c, now).score).toBeLessThan(assess(base, now).score);
 });
+
+it('computes Jackson deadline as future rather than trusting model arithmetic', async () => {
+  const { sourceDateContext } = await import('../services/research/freshness');
+  expect(
+    sourceDateContext(
+      {
+        url: 'https://city.gov',
+        title: 'ERP',
+        text: 'September 22, 2026',
+        fetched: true,
+        checkedAt: now.toISOString(),
+      },
+      now.toISOString(),
+    ),
+  ).toEqual([{ date: '2026-09-22', daysFromToday: 6 }]);
+});
