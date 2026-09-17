@@ -994,3 +994,120 @@ summary {
     justify-content: space-between;
   }
 }
+
+/* Product workflow: a quiet queue, explicit review, and compact controls. */
+.toolbar {
+  justify-content: space-between;
+  gap: 16px;
+}
+.toolbar > button {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.row-attention {
+  color: #73757e;
+}
+.row-next {
+  font-size: 11px;
+  color: #646da2;
+  line-height: 1.5;
+}
+.qualification {
+  margin: 16px 0;
+}
+.qualification label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: #535663;
+}
+.qualification select {
+  border: 1px solid #e0e0e7;
+  border-radius: 5px;
+  background: #fff;
+  padding: 6px 8px;
+  font-size: 12px;
+  min-width: 112px;
+}
+.form-pair {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+}
+.form-pair .field {
+  min-width: 0;
+  margin: 0;
+}
+.field input,
+.field textarea {
+  min-width: 0;
+  width: 100%;
+}
+.modal {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  width: 480px;
+}
+.modal form > button + button {
+  margin-left: 8px;
+}
+.source-url a {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .search {
+    min-width: 0;
+  }
+  .search input {
+    width: 100%;
+    min-width: 0;
+  }
+  .tab .icon {
+    display: none;
+  }
+  .qualification label {
+    gap: 8px;
+  }
+  .row-due {
+    line-height: 1.5;
+  }
+}
+.detail-tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+  margin-top: 24px;
+}
+.detail-tabs button {
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.detail-tabs button[aria-pressed='true'] {
+  color: var(--ink);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.drawer [hidden] {
+  display: none;
+}
+.drawer .detail-tabs + div section:first-child,
+.drawer .detail-tabs ~ div section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+@media (max-width: 760px) {
+  .detail-tabs {
+    gap: 16px;
+  }
+  .detail-tabs button {
+    font-size: 11px;
+  }
+}

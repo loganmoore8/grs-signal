@@ -104,7 +104,34 @@ export type Candidate = z.infer<typeof candidateSchema>;
 export const researchOutputSchema = z
   .object({ candidates: z.array(candidateSchema).max(50) })
   .strict();
+export const qualificationLabels = {
+  deadline: 'Deadline and submission requirements',
+  eligibility: 'Eligibility and mandatory qualifications',
+  platform: 'Platform and vendor restrictions',
+  meetings: 'Mandatory meetings and registration',
+  role: 'GRS prime or partner fit',
+} as const;
+export const qualificationSchema = z
+  .object({
+    deadline: z.enum(['unchecked', 'clear', 'blocked']),
+    eligibility: z.enum(['unchecked', 'clear', 'blocked']),
+    platform: z.enum(['unchecked', 'clear', 'blocked']),
+    meetings: z.enum(['unchecked', 'clear', 'blocked']),
+    role: z.enum(['unchecked', 'clear', 'blocked']),
+  })
+  .strict();
+export const emptyQualification = {
+  deadline: 'unchecked',
+  eligibility: 'unchecked',
+  platform: 'unchecked',
+  meetings: 'unchecked',
+  role: 'unchecked',
+} as const;
 export type Opportunity = Candidate & {
+  owner?: string;
+  qualification?: z.infer<typeof qualificationSchema>;
+  decisionReason?: string;
+  provenance?: { kind: 'automated' | 'chatgpt' | 'manual'; importedAt: string; actor: string };
   id: string;
   status: (typeof statuses)[number];
   score: number;
@@ -130,6 +157,9 @@ export const patchSchema = z
     version: z.number().int().positive(),
     status: z.enum(statuses).optional(),
     notes: z.string().max(5000).optional(),
+    owner: z.string().max(120).optional(),
+    qualification: qualificationSchema.optional(),
+    decisionReason: z.string().max(1500).optional(),
     userNextAction: z.string().max(1500).optional(),
     userNextDate: z.string().date().nullable().optional(),
     passReason: z.string().max(200).nullable().optional(),
@@ -240,10 +270,14 @@ export function expired(o: Candidate, now: Date) {
   }
   return o.dueDate < day;
 }
-export function shortlistEligible(o: Opportunity, now = new Date()) {
+export function shortlistEligible(
+  o: Opportunity,
+  now = new Date(),
+  minimumScore = scoring.shortlist,
+) {
   return (
     ['new', 'reviewing'].includes(o.status) &&
-    o.score >= scoring.shortlist &&
+    o.score >= minimumScore &&
     o.disposition !== 'suppressed' &&
     o.confidence === 'supported' &&
     o.readiness === 'actionable' &&
@@ -257,12 +291,22 @@ export function shortlistEligible(o: Opportunity, now = new Date()) {
     now.getTime() - new Date(o.verifiedAt!).getTime() <= scoring.freshHours * 3600000
   );
 }
+export function qualifiedEligible(o: Opportunity, now = new Date()) {
+  return (
+    shortlistEligible(o, now, scoring.review) &&
+    o.score >= scoring.review &&
+    Object.keys(qualificationLabels).every(
+      (k) => o.qualification?.[k as keyof typeof qualificationLabels] === 'clear',
+    )
+  );
+}
 export function viewOf(o: Opportunity, now = new Date()): View {
   if (['pursue', 'submitted', 'won', 'lost'].includes(o.status)) return 'pursuing';
   if (o.status === 'pass') return 'filtered';
   if (expired(o, now) || ['closed', 'canceled', 'awarded'].includes(o.procurementState))
     return 'filtered';
-  if (o.restored) return 'recommended';
+  if (o.restored || (o.provenance && o.provenance.kind !== 'automated' && !o.verifiedAt))
+    return 'recommended';
   return ['low_fit', 'suppressed'].includes(o.disposition) ? 'filtered' : 'recommended';
 }
 export function nextRelevantDate(o: Candidate, now = new Date()) {
@@ -326,6 +370,7 @@ export function createOpportunity(
     ...assess(c, now),
     id,
     runId,
+    provenance: { kind: 'automated', importedAt: now.toISOString(), actor: 'research' },
     status: 'new',
     version: 1,
     ruleVersion: scoring.version,
@@ -416,6 +461,7 @@ export function mergeOpportunity(
     updatedAt: now.toISOString(),
     runId,
     fingerprint: fp,
+    qualification: changed ? { ...emptyQualification } : old.qualification,
     history: history.slice(-100),
   };
 }

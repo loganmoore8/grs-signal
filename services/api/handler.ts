@@ -4,6 +4,7 @@ import {
   Conflict,
   rank,
   shortlistEligible,
+  qualifiedEligible,
   updateOpportunity,
   viewOf,
   type Opportunity,
@@ -12,6 +13,8 @@ import {
 import type { Store } from '../../packages/storage/store';
 import { AwsStore } from '../../packages/storage/aws';
 import type { Run } from '../research/engine';
+import { importSchema, importedCandidate } from '../../packages/domain/import';
+import { ingest } from '../research/engine';
 import scoring from '../../config/scoring.json';
 import { costReport } from '../research/cost';
 export async function api(
@@ -41,13 +44,28 @@ export async function api(
         cost: await costReport(store),
       });
     }
+    if (method === 'POST' && path === '/opportunities/import') {
+      const input = importSchema.parse(body);
+      const opportunity = await ingest(
+        store,
+        importedCandidate(input),
+        'import:' + new Date().toISOString(),
+        new Date(),
+        { kind: input.kind, actor, notes: input.report },
+      );
+      return response(200, opportunity);
+    }
     if (method === 'GET' && path === '/opportunities') {
       const view = (query.view || 'recommended') as View;
       if (!['recommended', 'pursuing', 'filtered'].includes(view))
         return response(400, { error: 'Unknown view' });
-      let rows = (await store.list<Opportunity>('opportunities', view)).filter(
-        (o) => viewOf(o) === view,
-      );
+      let rows = (await store.list<Opportunity>('opportunities')).filter((o) => viewOf(o) === view);
+      if (query.queue && !['review', 'qualified'].includes(query.queue))
+        return response(400, { error: 'Unknown queue' });
+      if (view === 'recommended' && query.queue)
+        rows = rows.filter((o) =>
+          query.queue === 'qualified' ? qualifiedEligible(o) : !qualifiedEligible(o),
+        );
       if (view === 'pursuing' && query.completed !== 'true')
         rows = rows.filter((o) => !['won', 'lost'].includes(o.status));
       if (query.q) {
@@ -70,7 +88,7 @@ export async function api(
           : rank,
       );
       const shortlist =
-        view === 'recommended'
+        view === 'recommended' && !query.queue
           ? rows.filter((o) => shortlistEligible(o)).slice(0, scoring.maxShortlist)
           : [];
       const rest = rows.filter((o) => !shortlist.some((s) => s.id === o.id));

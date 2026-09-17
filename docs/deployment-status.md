@@ -63,3 +63,11 @@ The full user prompt is now versioned in `config/research-brief.json` and drives
 See `docs/research-benchmark.md` for the three user-provided source cases and the difference between seeded extraction validation and independent discovery. Local validation: 95 tests, typecheck, formatting, web build and Lambda packaging pass. Pending SNS subscription expired independently; release targets only the two Lambdas to avoid reissuing subscription mail during this change.
 
 Final source benchmark retained all three user examples as partial-confidence leads (Grand Rapids 83, Denver Water 88, Jackson 45/subcontractor). These were explicitly supplied URLs, not independent discoveries. Added computed source date comparisons after finding model arithmetic incorrectly marked a future deadline past. Final checks: 96 tests, typecheck, formatting and production builds. Amplify release job 2 succeeded. Independent discovery recall still needs comparison on the next search allowance.
+
+## Product workflow — September 17, 2026
+
+Review is now the default queue; Qualified requires fresh official evidence, the review score threshold, and five clear human qualification checks. Pursuing and Archive retain existing decisions. The detail drawer separates the brief, qualification/pursuit controls, and source/activity history. Owner, rationale, next action, follow-up date and notes persist across research refreshes; changed procurement facts reset the qualification checklist.
+
+The authenticated importer accepts one pasted report at a time with user-confirmed identity and source details. Imports are explicitly unverified, deduplicate against existing identities without overwriting existing records, and enter reviewing status. Importing does not run paid research or send an alert. Legacy records without provenance display that the origin was not recorded.
+
+Validation: 99 tests passed and production build succeeded. Local browser checks covered desktop queue/drawer, qualification persistence, qualified routing, and importing a fictional lead; the mobile drawer was visually inspected. Remaining interaction checks were skipped at the user's request.

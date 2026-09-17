@@ -11,7 +11,7 @@ const server = createServer(async (req, res) => {
   }
   if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,PATCH,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,PATCH,POST,OPTIONS');
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();

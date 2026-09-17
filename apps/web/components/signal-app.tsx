@@ -1,8 +1,14 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Opportunity, UserPatch, View } from '../../../packages/domain/index';
-import { expired, viewOf } from '../../../packages/domain/index';
+import type { Opportunity, UserPatch } from '../../../packages/domain/index';
+import {
+  expired,
+  viewOf,
+  qualificationLabels,
+  emptyQualification,
+} from '../../../packages/domain/index';
 import { auth, isDemo, request, token, signIn, signOut } from '../lib/client';
+type View = 'recommended' | 'qualified' | 'pursuing' | 'filtered';
 type Listing = {
   shortlist: Opportunity[];
   items: Opportunity[];
@@ -15,13 +21,18 @@ type Health = {
   lastSuccessfulRun: { completedAt?: string } | null;
 };
 const names: Record<View, string> = {
-  recommended: 'Recommended',
+  recommended: 'Review',
+  qualified: 'Qualified',
   pursuing: 'Pursuing',
-  filtered: 'Filtered out',
+  filtered: 'Archive',
 };
 const date = (v: string | null) =>
   v
-    ? new Date(v + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    ? new Date(v + 'T12:00:00').toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
     : 'Date unconfirmed';
 const reasons = [
   'Staffing / BPO only',
@@ -50,7 +61,7 @@ export default function SignalApp() {
     [health, setHealth] = useState<Health | null>(null),
     [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Opportunity | null>(null),
-    [more, setMore] = useState(false),
+    [importing, setImporting] = useState(false),
     [busy, setBusy] = useState(false),
     [toast, setToast] = useState('');
   const [passTarget, setPassTarget] = useState<Opportunity | null>(null),
@@ -82,7 +93,13 @@ export default function SignalApp() {
     const generation = ++loadGeneration.current;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ view, q: query, completed: String(completed) });
+      const params = new URLSearchParams({
+        view: view === 'qualified' ? 'recommended' : view,
+        q: query,
+        completed: String(completed),
+      });
+      if (view === 'recommended' || view === 'qualified')
+        params.set('queue', view === 'recommended' ? 'review' : 'qualified');
       if (onlyNew && since.current) params.set('since', since.current);
       if (reasonFilter) params.set('reason', reasonFilter);
       const [data, h] = await Promise.all([
@@ -210,12 +227,13 @@ export default function SignalApp() {
               aria-current={v === view ? 'page' : undefined}
               className={v === view ? 'tab active' : 'tab'}
               onClick={() => {
+                setLoading(true);
                 setView(v);
                 setReasonFilter('');
                 setOnlyNew(false);
               }}
             >
-              <Icon name={v} />
+              <Icon name={v === 'qualified' ? 'pursuing' : v} />
               <span>{names[v]}</span>
             </button>
           ))}
@@ -285,6 +303,7 @@ export default function SignalApp() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </label>
+          <button onClick={() => setImporting(true)}>Import lead</button>
         </div>
         {error && (
           <div role="alert" className="error">
@@ -296,16 +315,16 @@ export default function SignalApp() {
           <div>
             <span className="section-label">
               {view === 'recommended'
-                ? 'Priority shortlist'
-                : view === 'pursuing'
-                  ? 'Active pursuits'
-                  : 'Review history'}
+                ? 'Needs review'
+                : view === 'qualified'
+                  ? 'Ready for a decision'
+                  : view === 'pursuing'
+                    ? 'Active pursuits'
+                    : 'Review history'}
             </span>
-            <span className="result-count">
-              {view === 'recommended' ? String(listing.shortlist.length) : String(listing.total)}
-            </span>
+            <span className="result-count">{listing.total}</span>
           </div>
-          {view === 'recommended' ? (
+          {view === 'recommended' || view === 'qualified' ? (
             <label className="toggle">
               <input
                 type="checkbox"
@@ -352,53 +371,37 @@ export default function SignalApp() {
           <div className="empty">Loading opportunities…</div>
         ) : (
           <>
-            {view === 'recommended' &&
-              listing.shortlist.map((o, i) => (
-                <Card key={o.id} o={o} index={i + 1} {...actions} busy={busy} />
-              ))}
-            {view === 'recommended' && listing.shortlist.length === 0 && (
+            {listing.items.map((o) => (
+              <Card key={o.id} o={o} {...actions} busy={busy} />
+            ))}
+            {listing.items.length === 0 && (
               <div className="empty">
-                <span className="empty-icon">◎</span>
-                <h2>No strong matches to surface.</h2>
-                <p>
-                  {latest?.status === 'completed'
-                    ? 'The latest research found no opportunities that meet the shortlist criteria.'
-                    : 'Research is incomplete or pending. Previous findings remain below.'}
-                </p>
-              </div>
-            )}
-            {view !== 'recommended' &&
-              listing.items.map((o) => <Card key={o.id} o={o} {...actions} busy={busy} compact />)}
-            {view !== 'recommended' && listing.items.length === 0 && (
-              <div className="empty">
+                <span className="empty-icon" aria-hidden="true">
+                  ◎
+                </span>
                 <h2>
-                  {view === 'pursuing'
-                    ? 'Your next pursuit starts here.'
-                    : 'Nothing filtered out yet.'}
+                  {query || onlyNew
+                    ? 'No opportunities match these filters.'
+                    : view === 'recommended'
+                      ? 'Your review queue is clear.'
+                      : view === 'qualified'
+                        ? 'No qualified opportunities yet.'
+                        : view === 'pursuing'
+                          ? 'Your next pursuit starts here.'
+                          : 'Nothing archived yet.'}
                 </h2>
                 <p>
-                  {view === 'pursuing'
-                    ? 'Choose Pursue on an opportunity to keep it in focus.'
-                    : 'Assessed exclusions and passed opportunities will appear here.'}
+                  {view === 'qualified'
+                    ? 'Qualified opportunities need fresh official evidence and a completed qualification checklist. Start in Review.'
+                    : view === 'recommended'
+                      ? 'New research findings and imported leads appear here for qualification.'
+                      : view === 'pursuing'
+                        ? 'Choose Pursue on an opportunity to track your next action.'
+                        : 'Passed, closed and excluded opportunities stay available here.'}
                 </p>
               </div>
             )}
-            {view === 'recommended' && listing.items.length > 0 && (
-              <section className="more">
-                <button className="more-toggle" aria-expanded={more} onClick={() => setMore(!more)}>
-                  <span>
-                    <Icon name={more ? 'down' : 'right'} /> More matches{' '}
-                    <b>{listing.items.length}</b>
-                  </span>
-                  <span>Lower fit or needs verification</span>
-                </button>
-                {more &&
-                  listing.items.map((o) => (
-                    <Card key={o.id} o={o} {...actions} busy={busy} compact />
-                  ))}
-              </section>
-            )}
-            {listing.nextCursor && (view !== 'recommended' || more) && (
+            {listing.nextCursor && (
               <button
                 className="load-more"
                 disabled={busy}
@@ -407,11 +410,13 @@ export default function SignalApp() {
                   setBusy(true);
                   try {
                     const params = new URLSearchParams({
-                      view,
+                      view: view === 'qualified' ? 'recommended' : view,
                       q: query,
                       completed: String(completed),
                       cursor: listing.nextCursor!,
                     });
+                    if (view === 'recommended' || view === 'qualified')
+                      params.set('queue', view === 'recommended' ? 'review' : 'qualified');
                     if (onlyNew && since.current) params.set('since', since.current);
                     if (reasonFilter) params.set('reason', reasonFilter);
                     const data = await request<Listing>('/opportunities?' + params, access);
@@ -437,6 +442,7 @@ export default function SignalApp() {
       </main>
       {selected && (
         <Detail
+          key={selected.id}
           o={selected}
           close={close}
           busy={busy}
@@ -444,6 +450,19 @@ export default function SignalApp() {
           pass={() => actions.pass(selected)}
           restore={() => actions.restore(selected)}
         />
+      )}
+      {importing && (
+        <Modal title="Import a lead" close={() => setImporting(false)}>
+          <ImportLead
+            access={access}
+            done={(o) => {
+              setImporting(false);
+              setView('recommended');
+              open(o);
+              void load();
+            }}
+          />
+        </Modal>
       )}
       {passTarget && (
         <Modal title="Pass on this opportunity" close={() => setPassTarget(null)}>
@@ -561,6 +580,7 @@ function Card({
   compact?: boolean;
 }) {
   const filtered = viewOf(o) === 'filtered';
+  const imported = o.provenance?.kind === 'chatgpt' || o.provenance?.kind === 'manual';
   const attention = filtered
     ? o.passReason || o.facts.excludedReason || 'Low fit'
     : o.procurementState !== 'open'
@@ -592,7 +612,27 @@ function Card({
           <span className="row-state">{o.state}</span>
         </span>
         <span className="row-title">{o.title}</span>
-        {attention && <span className="row-attention">{attention}</span>}
+        {(attention || imported || o.owner) && (
+          <span className="row-attention">
+            {[
+              attention,
+              imported
+                ? o.provenance?.kind === 'chatgpt'
+                  ? 'ChatGPT import'
+                  : 'Manual import'
+                : null,
+              o.owner,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        )}
+        {viewOf(o) === 'pursuing' && (
+          <span className="row-next">
+            {o.userNextAction || 'Set a next action'}
+            {o.userNextDate ? ` · ${date(o.userNextDate)}` : ''}
+          </span>
+        )}
       </span>
       <span className="row-due">
         {o.dueDate ? date(o.dueDate) : o.ongoing ? 'Ongoing' : 'Unconfirmed'}
@@ -601,7 +641,7 @@ function Card({
         className={'row-score ' + (index ? 'high' : '')}
         title={o.score + '/100 GRS fit · ' + o.confidence}
       >
-        {o.score}
+        {imported && !o.verifiedAt ? '—' : o.score}
       </span>
     </button>
   );
@@ -657,9 +697,11 @@ function useDialog(ref: React.RefObject<HTMLDivElement | null>, close: () => voi
         onClose.current();
       }
       if (e.key === 'Tab') {
-        const list = ref.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled),a[href],input,select,textarea,[tabindex="0"]',
-        );
+        const list = Array.from(
+          ref.current?.querySelectorAll<HTMLElement>(
+            'button:not(:disabled),a[href],input,select,textarea,[tabindex="0"]',
+          ) || [],
+        ).filter((el) => el.getClientRects().length > 0);
         if (!list?.length) return;
         const first = list[0]!,
           last = list[list.length - 1]!;
@@ -686,7 +728,7 @@ function useDialog(ref: React.RefObject<HTMLDivElement | null>, close: () => voi
 function Detail({
   o,
   close,
-  save,
+  save: persist,
   pass,
   restore,
   busy,
@@ -700,14 +742,31 @@ function Detail({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, close);
+  const [panel, setPanel] = useState<'brief' | 'qualification' | 'activity'>('brief');
   const [notes, setNotes] = useState(o.notes),
     [next, setNext] = useState(o.userNextAction),
-    [nextDate, setNextDate] = useState(o.userNextDate || '');
+    [nextDate, setNextDate] = useState(o.userNextDate || ''),
+    [owner, setOwner] = useState(o.owner || ''),
+    [decision, setDecision] = useState(o.decisionReason || ''),
+    [qualification, setQualification] = useState(o.qualification || { ...emptyQualification });
   useEffect(() => {
     setNotes(o.notes);
     setNext(o.userNextAction);
     setNextDate(o.userNextDate || '');
-  }, [o.id, o.notes, o.userNextAction, o.userNextDate]);
+    setOwner(o.owner || '');
+    setDecision(o.decisionReason || '');
+    setQualification(o.qualification || { ...emptyQualification });
+  }, [o.id, o.notes, o.userNextAction, o.userNextDate, o.owner, o.decisionReason, o.qualification]);
+  const save = (patch: Omit<UserPatch, 'version'>) =>
+    persist({
+      notes,
+      owner,
+      qualification,
+      decisionReason: decision,
+      userNextAction: next,
+      userNextDate: nextDate || null,
+      ...patch,
+    });
   return (
     <div
       className="overlay drawer-overlay"
@@ -734,7 +793,11 @@ function Detail({
         </p>
         <h1>{o.title}</h1>
         <div className="drawer-badges">
-          <b>{o.score} / 100 GRS fit</b>
+          <b>
+            {o.provenance && o.provenance.kind !== 'automated' && !o.verifiedAt
+              ? 'Fit not verified'
+              : `${o.score} / 100 GRS fit`}
+          </b>
           <span>
             {o.confidence === 'supported'
               ? 'Source-supported'
@@ -785,163 +848,400 @@ function Detail({
           )}
         </div>
         {o.status === 'pass' && <p className="decision-note">Passed: {o.passReason}</p>}
-        <section>
-          <h3>Why GRS should care</h3>
-          <p>{o.whyFits}</p>
-          <div className="next-box">
-            <span>Recommended next step</span>
-            <p>{o.nextAction}</p>
-          </div>
-        </section>
-        <section>
-          <h3>Modernization scope</h3>
-          <p>{o.scope}</p>
-          <dl>
-            <dt>Current platform</dt>
-            <dd>{o.legacyPlatform || 'Unknown'}</dd>
-            <dt>Target platform</dt>
-            <dd>{o.targetPlatform || 'Unknown'}</dd>
-            <dt>Likely role</dt>
-            <dd>{o.role}</dd>
-          </dl>
-        </section>
-        <section>
-          <h3>Procurement facts</h3>
-          <dl>
-            <dt>Agency type</dt>
-            <dd>{o.buyerProfile?.agencyType || o.buyerType.replaceAll('_', ' ')}</dd>
-            <dt>Population served</dt>
-            <dd>
-              {o.buyerProfile?.population != null
-                ? o.buyerProfile.population.toLocaleString()
-                : 'Not confirmed'}
-            </dd>
-            <dt>Official estimated value</dt>
-            <dd>
-              {o.buyerProfile?.estimatedValueUsd != null
-                ? new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                    maximumFractionDigits: 0,
-                  }).format(o.buyerProfile.estimatedValueUsd)
-                : 'Not stated'}
-            </dd>
-            <dt>GRS prime potential</dt>
-            <dd>{o.buyerProfile?.primePlausibility || 'Not assessed'}</dd>
-            {o.buyerProfile?.rationale && (
-              <>
-                <dt>Buyer and deal fit</dt>
-                <dd>{o.buyerProfile.rationale}</dd>
-              </>
-            )}
-            <dt>Solicitation</dt>
-            <dd>{o.solicitationNumber || 'Unknown'}</dd>
-            <dt>Type</dt>
-            <dd>{o.procurementType}</dd>
-            <dt>Published</dt>
-            <dd>{date(o.publicationDate)}</dd>
-            <dt>Due</dt>
-            <dd>
-              {date(o.dueDate)}
-              {o.dueAt ? ` · ${new Date(o.dueAt).toLocaleTimeString()}` : ' · Time unverified'}
-            </dd>
-            <dt>Procurement state</dt>
-            <dd>{o.procurementState}</dd>
-            {o.actionDates.map((d) => (
-              <div className="dl-row" key={d.label}>
-                <dt>{d.label}</dt>
-                <dd>{date(d.date)}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-        {(o.blockers.length > 0 || o.unresolvedFields.length > 0) && (
-          <section>
-            <h3>Blockers & unknowns</h3>
-            <ul>
-              {[...o.blockers, ...o.unresolvedFields].map((s, i) => (
-                <li key={i}>{s}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-        <section>
-          <h3>Supporting evidence</h3>
-          {o.evidence.map((e, i) => (
-            <blockquote key={i}>
-              <p>{e.excerpt}</p>
-              <a href={e.url} target="_blank" rel="noreferrer">
-                {e.official ? 'Official evidence' : 'Discovery source'}
-                {e.locator ? ` · ${e.locator}` : ''} ↗
-              </a>
-            </blockquote>
+        <div className="detail-tabs" aria-label="Detail sections">
+          {(['brief', 'qualification', 'activity'] as const).map((p) => (
+            <button key={p} aria-pressed={panel === p} onClick={() => setPanel(p)}>
+              {p === 'brief'
+                ? 'Brief'
+                : p === 'qualification'
+                  ? 'Qualification & pursuit'
+                  : 'Sources & activity'}
+            </button>
           ))}
-          <details>
-            <summary>Score breakdown · rubric {o.ruleVersion}</summary>
+        </div>
+        <div hidden={panel !== 'qualification'}>
+          <section>
+            <h3>Qualification</h3>
+            <p className="hint">
+              Record your document review. These checks do not replace source verification.
+            </p>
+            <div className="qualification">
+              {Object.entries(qualificationLabels).map(([key, label]) => (
+                <label key={key}>
+                  <span>{label}</span>
+                  <select
+                    aria-label={label}
+                    value={qualification[key as keyof typeof qualification]}
+                    onChange={(e) => setQualification({ ...qualification, [key]: e.target.value })}
+                  >
+                    <option value="unchecked">Not checked</option>
+                    <option value="clear">Clear</option>
+                    <option value="blocked">Blocked</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+            <button disabled={busy} onClick={() => void save({ qualification })}>
+              Save qualification
+            </button>
+          </section>
+          <section>
+            <h3>Your next move</h3>
+            <label className="field">
+              Owner
+              <input
+                value={owner}
+                maxLength={120}
+                onChange={(e) => setOwner(e.target.value)}
+                placeholder="Assign a person"
+              />
+            </label>
+            <label className="field">
+              Next action
+              <input
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                placeholder="Optional"
+                maxLength={1500}
+              />
+            </label>
+            <label className="field">
+              Follow-up date
+              <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+            </label>
+            <label className="field">
+              Qualification notes / next unresolved question
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Capture qualification notes…"
+                rows={4}
+                maxLength={5000}
+              />
+            </label>
+            <label className="field">
+              Bid / no-bid rationale
+              <textarea
+                value={decision}
+                maxLength={1500}
+                onChange={(e) => setDecision(e.target.value)}
+                rows={2}
+                placeholder="Why is this worth pursuing, or why not?"
+              />
+            </label>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() =>
+                void save({
+                  notes,
+                  owner,
+                  decisionReason: decision,
+                  userNextAction: next,
+                  userNextDate: nextDate || null,
+                })
+              }
+            >
+              Save changes
+            </button>
+          </section>
+        </div>
+        <div hidden={panel !== 'brief'}>
+          <section>
+            <h3>Why GRS should care</h3>
+            <p>{o.whyFits}</p>
+            <div className="next-box">
+              <span>Recommended next step</span>
+              <p>{o.nextAction}</p>
+            </div>
+          </section>
+          <section>
+            <h3>Modernization scope</h3>
+            <p>{o.scope}</p>
             <dl>
-              {Object.entries(o.breakdown).map(([k, v]) => (
-                <div className="dl-row" key={k}>
-                  <dt>{k}</dt>
-                  <dd>{v} points</dd>
+              <dt>Current platform</dt>
+              <dd>{o.legacyPlatform || 'Unknown'}</dd>
+              <dt>Target platform</dt>
+              <dd>{o.targetPlatform || 'Unknown'}</dd>
+              <dt>Likely role</dt>
+              <dd>{o.role}</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Procurement facts</h3>
+            <dl>
+              <dt>Agency type</dt>
+              <dd>{o.buyerProfile?.agencyType || o.buyerType.replaceAll('_', ' ')}</dd>
+              <dt>Population served</dt>
+              <dd>
+                {o.buyerProfile?.population != null
+                  ? o.buyerProfile.population.toLocaleString()
+                  : 'Not confirmed'}
+              </dd>
+              <dt>Official estimated value</dt>
+              <dd>
+                {o.buyerProfile?.estimatedValueUsd != null
+                  ? new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                      maximumFractionDigits: 0,
+                    }).format(o.buyerProfile.estimatedValueUsd)
+                  : 'Not stated'}
+              </dd>
+              <dt>GRS prime potential</dt>
+              <dd>{o.buyerProfile?.primePlausibility || 'Not assessed'}</dd>
+              {o.buyerProfile?.rationale && (
+                <>
+                  <dt>Buyer and deal fit</dt>
+                  <dd>{o.buyerProfile.rationale}</dd>
+                </>
+              )}
+              <dt>Solicitation</dt>
+              <dd>{o.solicitationNumber || 'Unknown'}</dd>
+              <dt>Type</dt>
+              <dd>{o.procurementType}</dd>
+              <dt>Published</dt>
+              <dd>{date(o.publicationDate)}</dd>
+              <dt>Due</dt>
+              <dd>
+                {date(o.dueDate)}
+                {o.dueAt ? ` · ${new Date(o.dueAt).toLocaleTimeString()}` : ' · Time unverified'}
+              </dd>
+              <dt>Procurement state</dt>
+              <dd>{o.procurementState}</dd>
+              {o.actionDates.map((d) => (
+                <div className="dl-row" key={d.label}>
+                  <dt>{d.label}</dt>
+                  <dd>{date(d.date)}</dd>
                 </div>
               ))}
             </dl>
-          </details>
-        </section>
-        <section>
-          <h3>Your next move</h3>
-          <label className="field">
-            Next action
-            <input
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-              placeholder="Optional"
-              maxLength={1500}
-            />
-          </label>
-          <label className="field">
-            Action date
-            <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
-          </label>
-          <label className="field">
-            Notes
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Capture qualification notes…"
-              rows={4}
-              maxLength={5000}
-            />
-          </label>
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={() =>
-              void save({ notes, userNextAction: next, userNextDate: nextDate || null })
-            }
-          >
-            Save changes
-          </button>
-        </section>
-        <section>
-          <h3>Activity</h3>
-          <p className="hint">
-            First found {new Date(o.firstFoundAt).toLocaleDateString()} · Last verified{' '}
-            {o.verifiedAt ? new Date(o.verifiedAt).toLocaleString() : 'Not verified'}
-          </p>
-          {[...o.history].reverse().map((h, i) => (
-            <div className="history" key={i}>
-              <span />
-              <div>
-                <p>{h.message}</p>
-                <small>
-                  {new Date(h.at).toLocaleString()} · {h.actor}
-                </small>
+          </section>
+          {(o.blockers.length > 0 || o.unresolvedFields.length > 0) && (
+            <section>
+              <h3>Blockers & unknowns</h3>
+              <ul>
+                {[...o.blockers, ...o.unresolvedFields].map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <section>
+            <h3>Supporting evidence</h3>
+            {o.evidence.map((e, i) => (
+              <blockquote key={i}>
+                <p>{e.excerpt}</p>
+                <a href={e.url} target="_blank" rel="noreferrer">
+                  {e.official ? 'Official evidence' : 'Discovery source'}
+                  {e.locator ? ` · ${e.locator}` : ''} ↗
+                </a>
+              </blockquote>
+            ))}
+            <details>
+              <summary>Score breakdown · rubric {o.ruleVersion}</summary>
+              <dl>
+                {Object.entries(o.breakdown).map(([k, v]) => (
+                  <div className="dl-row" key={k}>
+                    <dt>{k}</dt>
+                    <dd>{v} points</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          </section>
+        </div>
+        <div hidden={panel !== 'activity'}>
+          <section>
+            <h3>Source & activity</h3>
+            <p className="hint">
+              Origin:{' '}
+              {o.provenance?.kind === 'chatgpt'
+                ? 'ChatGPT report'
+                : o.provenance?.kind === 'manual'
+                  ? 'Manual entry'
+                  : o.provenance?.kind === 'automated'
+                    ? 'Automated research'
+                    : 'Not recorded (legacy record)'}
+            </p>
+            {o.sourceUrls.map((url) => (
+              <p key={url} className="source-url">
+                <a href={url} target="_blank" rel="noreferrer">
+                  {new URL(url).hostname} ↗
+                </a>
+              </p>
+            ))}
+            <p className="hint">
+              First found {new Date(o.firstFoundAt).toLocaleDateString()} · Last verified{' '}
+              {o.verifiedAt ? new Date(o.verifiedAt).toLocaleString() : 'Not verified'}
+            </p>
+            {[...o.history].reverse().map((h, i) => (
+              <div className="history" key={i}>
+                <span />
+                <div>
+                  <p>{h.message}</p>
+                  <small>
+                    {new Date(h.at).toLocaleString()} · {h.actor}
+                  </small>
+                </div>
               </div>
-            </div>
-          ))}
-        </section>
+            ))}
+          </section>
+        </div>
       </div>
     </div>
+  );
+}
+
+function ImportLead({ access, done }: { access: string; done: (o: Opportunity) => void }) {
+  const [report, setReport] = useState('');
+  const [agency, setAgency] = useState('');
+  const [state, setState] = useState('');
+  const [title, setTitle] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [solicitation, setSolicitation] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [kind, setKind] = useState('chatgpt');
+  const [step, setStep] = useState(0);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!step) {
+          const link = report.match(/https?:\/\/[^\s<>\])]+/);
+          if (link) setSourceUrl(link[0]);
+          const heading = report.split('\n').find((line) => /[—–]/.test(line));
+          if (heading) {
+            const [buyer, ...parts] = heading.replace(/^[#*\s]+/, '').split(/[—–]/);
+            setAgency(buyer!.trim());
+            setTitle(parts.join('—').trim().replace(/\*+$/, ''));
+          }
+          setStep(1);
+          return;
+        }
+        setSaving(true);
+        setError('');
+        try {
+          const o = await request<Opportunity>('/opportunities/import', access, {
+            method: 'POST',
+            body: JSON.stringify({
+              agency,
+              state,
+              title,
+              sourceUrl,
+              solicitationNumber: solicitation,
+              dueDate: dueDate || null,
+              report,
+              kind,
+            }),
+          });
+          done(o);
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      <p className="muted">
+        Paste one opportunity at a time. Confirm its details before adding it to Review. Existing
+        records are kept unchanged.
+      </p>
+      {!step ? (
+        <>
+          <label className="field">
+            Origin
+            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="chatgpt">ChatGPT report</option>
+              <option value="manual">Manual entry</option>
+            </select>
+          </label>
+          <label className="field">
+            Opportunity report
+            <textarea
+              required
+              value={report}
+              onChange={(e) => setReport(e.target.value)}
+              rows={9}
+              maxLength={5000}
+              placeholder="Paste the finding and its source link…"
+            />
+          </label>
+        </>
+      ) : (
+        <>
+          <label className="field">
+            Agency
+            <input
+              required
+              value={agency}
+              maxLength={250}
+              onChange={(e) => setAgency(e.target.value)}
+            />
+          </label>
+          <div className="form-pair">
+            <label className="field">
+              State
+              <input
+                required
+                pattern="[A-Z]{2}"
+                maxLength={2}
+                placeholder="MI"
+                value={state}
+                onChange={(e) => setState(e.target.value.toUpperCase())}
+              />
+            </label>
+            <label className="field">
+              Reported due date
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </label>
+          </div>
+          <label className="field">
+            Opportunity title
+            <input
+              required
+              value={title}
+              maxLength={500}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Solicitation number
+            <input
+              value={solicitation}
+              maxLength={200}
+              onChange={(e) => setSolicitation(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Source link
+            <input
+              required
+              type="url"
+              pattern="https?://.*"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+            />
+          </label>
+          <p className="hint">
+            Reported dates and fit claims remain unverified. Importing does not send an email or run
+            paid research.
+          </p>
+          <button type="button" disabled={saving} onClick={() => setStep(0)}>
+            Back
+          </button>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+      <button className="primary" type="submit" disabled={saving}>
+        {saving ? 'Importing…' : step ? 'Add to Review' : 'Review details'}
+      </button>
+    </form>
   );
 }

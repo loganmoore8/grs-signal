@@ -22,7 +22,7 @@ resource "aws_iam_role_policy" "data" {
   role     = each.value.id
   policy = jsonencode({ Version = "2012-10-17", Statement = concat([
     { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:Query"], Resource = concat([for t in aws_dynamodb_table.data : t.arn], [for t in aws_dynamodb_table.data : "${t.arn}/index/*"]) },
-    { Effect = "Allow", Action = ["dynamodb:PutItem"], Resource = each.key == "api" ? [aws_dynamodb_table.data["opportunities"].arn] : [for t in aws_dynamodb_table.data : t.arn] }
+    { Effect = "Allow", Action = ["dynamodb:PutItem"], Resource = each.key == "api" ? [aws_dynamodb_table.data["opportunities"].arn, aws_dynamodb_table.data["history"].arn] : [for t in aws_dynamodb_table.data : t.arn] }
     ], each.key == "research" ? [
     { Effect = "Allow", Action = ["s3:PutObject"], Resource = ["${aws_s3_bucket.snapshots.arn}/*"] },
     { Effect = "Allow", Action = ["ses:SendEmail"], Resource = [aws_ses_email_identity.sender.arn] }
@@ -64,7 +64,7 @@ resource "aws_apigatewayv2_api" "api" {
   protocol_type = "HTTP"
   cors_configuration {
     allow_origins = [local.app_url]
-    allow_methods = ["GET", "PATCH", "OPTIONS"]
+    allow_methods = ["GET", "PATCH", "POST", "OPTIONS"]
     allow_headers = ["Authorization", "Content-Type"]
   }
 }
@@ -85,7 +85,7 @@ resource "aws_apigatewayv2_integration" "api" {
   payload_format_version = "2.0"
 }
 resource "aws_apigatewayv2_route" "routes" {
-  for_each             = toset(["GET /opportunities", "GET /opportunities/{id}", "PATCH /opportunities/{id}", "GET /health"])
+  for_each             = toset(["POST /opportunities/import", "GET /opportunities", "GET /opportunities/{id}", "PATCH /opportunities/{id}", "GET /health"])
   api_id               = aws_apigatewayv2_api.api.id
   route_key            = each.key
   target               = "integrations/${aws_apigatewayv2_integration.api.id}"

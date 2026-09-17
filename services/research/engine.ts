@@ -45,7 +45,13 @@ export type Run = {
   mode: 'local' | 'live';
 };
 const hash = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 32);
-export async function ingest(store: Store, raw: unknown, runId: string, now = new Date()) {
+export async function ingest(
+  store: Store,
+  raw: unknown,
+  runId: string,
+  now = new Date(),
+  imported?: { kind: 'chatgpt' | 'manual'; actor: string; notes: string },
+) {
   const c = candidateSchema.parse(raw),
     keys = identityKeys(c).map((k) => `identity:${hash(k)}`);
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -64,9 +70,27 @@ export async function ingest(store: Store, raw: unknown, runId: string, now = ne
     }
     const id = existingId || hash(keys[0]!);
     const old = await store.get<Opportunity>('opportunities', id);
+    if (old && imported) return old; // Imports never overwrite researched facts or user decisions.
     const opportunity = old
       ? mergeOpportunity(old, c, runId, now)
       : createOpportunity(c, id, runId, now);
+    if (imported) {
+      opportunity.status = 'reviewing';
+      opportunity.provenance = {
+        kind: imported.kind,
+        actor: imported.actor,
+        importedAt: now.toISOString(),
+      };
+      opportunity.notes = imported.notes;
+      opportunity.history = [
+        {
+          at: now.toISOString(),
+          actor: imported.actor,
+          kind: 'imported',
+          message: `Imported from ${imported.kind === 'chatgpt' ? 'ChatGPT report' : 'manual entry'}; verification required`,
+        },
+      ];
+    }
     try {
       await store.transaction([
         { table: 'opportunities', id, value: opportunity, expectedVersion: old?.version || 0 },
